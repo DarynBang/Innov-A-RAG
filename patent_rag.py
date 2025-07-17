@@ -27,9 +27,9 @@ class PatentRAG:
         self.chunk_overlap = config.get("chunk_overlap", 256)
         self.batch_size = config.get("batch_size", 5000)
         self.top_k = config.get("top_k", 5)
-        self.output_subdir = config.get("output_subdir", "firm_summary_index")
-        self.chroma_subdir = config.get("chroma_subdir", "firm_data/chroma_db")
-        self.collection_name = config.get("collection_name", "firm_summary_index")
+        self.output_subdir = config.get("output_subdir", "patent_chunks_index")
+        self.chroma_subdir = config.get("chroma_subdir", "patent_data/chroma_db")
+        self.collection_name = config.get("collection_name", "patent_text_index")
         self.force_reindex = config.get("force_reindex", False)
 
         # build derived paths
