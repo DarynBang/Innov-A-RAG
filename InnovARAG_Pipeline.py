@@ -66,6 +66,28 @@ class InnovARAG_Pipeline:
     def ingest_firm(self, force_reindex=False) -> None:
         self.firm_rag.ingest_all(force_reindex=force_reindex)
 
+    def add_patent_to_index(self,
+                        patent_id: str,
+                        company_id: str,
+                        company_name: str,
+                        full_text: str):
+    
+        self.patent_rag.add_one(patent_id=patent_id,
+                                company_id=company_id,
+                                company_name=company_name,
+                                full_text=full_text)
+
+    
+    def add_firm_summary_to_index(self,
+                                  company_id: str,
+                                  company_name: str,
+                                  company_keywords: str,
+                                  summary_text: str
+                                  ):
+        self.firm_rag.add_one(company_id=company_id,
+                              company_name=company_name,
+                              company_keywords=company_keywords,
+                              summary_text=summary_text)
 
     def process_query_patent(self, question: str):
         return self.multi_agent.run(question)
