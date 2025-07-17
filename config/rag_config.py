@@ -2,11 +2,9 @@
 EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 patent_config = {
-    "index_dir": "data",
-    "embed_model": "minilm",          # or 'mpnet', 'bge'
+    "patent_csv": r'random100000_us_patents.csv',       # <- Path to patent csv file
+    "embed_model": "sentence-transformers/all-MiniLM-L6-v2",          # or 'mpnet', 'bge'
     "top_k": 3,
-    "chunk_size": 3000,
-    "chunk_overlap": 300,
     "output_subdir": "patent_chunks_index",
     "chroma_subdir": r"patent_data/chroma_db",
     "collection_name": f"patent_text_index",
@@ -14,11 +12,9 @@ patent_config = {
 }
 
 firm_config = {
-    "data_dir": "data",
-    "embed_model": "minilm",          # or 'mpnet', 'bge'
+    "firm_csv": r'firms_1000_summary.csv',               # <- Path to firm csv file
+    "embed_model": "sentence-transformers/all-MiniLM-L6-v2",          # or 'mpnet', 'bge'
     "top_k": 3,
-    "chunk_size": 3000,
-    "chunk_overlap": 300,
     "output_subdir": r"firm_summary_index",
     "chroma_subdir": r"firm_data/chroma_db",
     "collection_name": f"firm_summary_index",
