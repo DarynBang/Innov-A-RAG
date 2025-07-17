@@ -6,6 +6,7 @@ import chromadb
 import chromadb.utils.embedding_functions as embedding_functions
 import torch
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from config.rag_config import patent_config
 import pandas as pd
 
 class PatentRAG:
@@ -13,42 +14,50 @@ class PatentRAG:
         self,
         df,
         index_dir: str,
-        output_subdir: str,
-        chroma_subdir: str,
-        collection_name: str,
-        embed_model: str = "sentence-transformers/all-MiniLM-L6-v2",
-        device: str = None,
-        chunk_size: int = 2048,
-        chunk_overlap: int = 256,
-        batch_size: int = 5000
+        config: dict
     ):
         # Data + paths
         self.df = df
         self.index_dir = index_dir
-        self.output_dir = os.path.join(index_dir, output_subdir)
-        self.chroma_path = os.path.join(index_dir, chroma_subdir)
-        self.collection_name = collection_name
+        self.df = df
+        self.index_dir = index_dir
+        self.embed_model = config.get("embed_model")
+        self.device = config.get("device", torch.cuda.is_available() and "cuda" or "cpu")
+        self.chunk_size = config.get("chunk_size", 2048)
+        self.chunk_overlap = config.get("chunk_overlap", 256)
+        self.batch_size = config.get("batch_size", 5000)
+        self.top_k = config.get("top_k", 5)
+        self.output_subdir = config.get("output_subdir", "firm_summary_index")
+        self.chroma_subdir = config.get("chroma_subdir", "firm_data/chroma_db")
+        self.collection_name = config.get("collection_name", "firm_summary_index")
+        self.force_reindex = config.get("force_reindex", False)
+
+        # build derived paths
+        self.output_dir = os.path.join(self.index_dir, self.output_subdir)
+        self.chroma_path = os.path.join(self.index_dir, self.chroma_subdir)
+        os.makedirs(self.output_dir, exist_ok=True)
+        os.makedirs(self.chroma_path, exist_ok=True)
 
         # JSON file paths
         self.chunks_path  = os.path.join(self.output_dir, "chunks.json")
         self.mapping_path = os.path.join(self.output_dir, "chunk_mapping.json")
 
         # Embedder + splitter
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.embed_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name=embed_model,
+            model_name=self.embed_model,
             device=self.device
         )
         self.splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
+            chunk_size=self.chunk_size,
+            chunk_overlap=self.chunk_overlap,
             separators=["\n\n", "\n", " ", ""]
         )
 
         # Chroma client placeholder
         os.makedirs(self.chroma_path, exist_ok=True)
         self.client = chromadb.PersistentClient(path=self.chroma_path)
-        self.batch_size = batch_size
+        self.batch_size = self.batch_size
 
         # In‐memory storage
         self.all_chunks: List[str] = []
@@ -233,18 +242,7 @@ class PatentRAG:
 
 def main():
     # CONFIGURATION
-    INDEX_DIR = r"data"
-    OUTPUT_PATENT_SUBDIR = "patent_chunks_index"
-    PATENT_COLLECTION_NAME = f"patent_text_index"
-
-    PATENT_CHROMA_DB_PATH = os.path.join(INDEX_DIR, r"patent_data/chroma_db")
-
-    # EMBED_MODEL     = "BAAI/bge-small-en-v1.5"
-    EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-
-    CHUNK_SIZE = 2048
-    CHUNK_OVERLAP = 256
-
+    INDEX_DIR = r"RAG_INDEX"
     patent_csv = r'random100000_us_patents.csv'
 
     patent_df = pd.read_csv(patent_csv)
@@ -253,19 +251,14 @@ def main():
     patent_rag = PatentRAG(
         df=patent_df_test,
         index_dir=INDEX_DIR,
-        output_subdir=OUTPUT_PATENT_SUBDIR,
-        chroma_subdir=PATENT_CHROMA_DB_PATH,
-        collection_name=PATENT_COLLECTION_NAME,
-        chunk_size=CHUNK_SIZE,
-        chunk_overlap=CHUNK_OVERLAP,
-        embed_model=EMBED_MODEL
+        config=patent_config
     )
 
     # Full rebuild + ingest:
     patent_rag.ingest_all(force_reindex=False)
 
-    # # Full rebuild + ingest:
-    # patent_rag.ingest_all(force_reindex=True)
+    # Full rebuild + ingest:
+    patent_rag.ingest_all(force_reindex=True)
 
     # Add or skip a single company summary:
     res = patent_rag.add_one(
