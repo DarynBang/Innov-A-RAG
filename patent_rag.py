@@ -76,7 +76,7 @@ class PatentRAG:
         self.all_chunks = []
         self.all_metadatas = []
 
-        for idx, row in tqdm(self.df.iterrows(), total=len(self.df), desc="Chunking summaries"):
+        for idx, row in tqdm(self.df.iterrows(), total=len(self.df), desc="Chunking Patents"):
             cid = row["hojin_id"]
             name = row["company_name"]
             patent_id   = row["appln_id"]
@@ -149,7 +149,7 @@ class PatentRAG:
         full_text: str,
     ):
         """
-        Incrementally add one company’s summary:
+        Incrementally add one Patent:
         check existing, chunk, update JSON + Chroma.
         """
         # ensure chunks are loaded
@@ -171,7 +171,7 @@ class PatentRAG:
         if hits["metadatas"]:
             return {"error": f"Patent {patent_id} of Company {company_id} already indexed."}
 
-        # chunk new summary
+        # chunk new patent
         chunks = self.splitter.split_text(full_text)
         offset = len(self.all_chunks)
         new_ids = [f"chunk_{offset + i}" for i in range(len(chunks))]
