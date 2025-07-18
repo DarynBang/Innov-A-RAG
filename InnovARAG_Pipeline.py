@@ -115,7 +115,7 @@ def main():
     # Initialize pipeline with configs
 
     # Consistent index folder under PDF dir
-    index_dir = r"data"
+    index_dir = r"RAG_INDEX"
     query = r"Machine Learning and Computer Vision"
     patent_abstract = """"""
 
