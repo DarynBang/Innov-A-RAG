@@ -25,7 +25,7 @@ warnings.filterwarnings("ignore")
 class InnovARAG_Pipeline:
     def __init__(self, index_dir, patent_config, firm_config, agent_config, ingest_only=False):
         """
-        Initialize the M3APipeline.
+        Initialize the InnovARAG_Pipeline.
         """
         # Initialize RAG indexer and multi-agent QA system
         os.makedirs(index_dir, exist_ok=True)
@@ -60,20 +60,10 @@ class InnovARAG_Pipeline:
             self.multi_agent.register_agent("MarketManagerAgent", qa_model=qa_market_manager)
 
     def ingest_patent(self, force_reindex=False) -> None:
-        """
-        Ingest all PDF documents and build text and image-based vector indices.
-
-        This method must be called before querying, unless precomputed indices already exist.
-        """
         self.patent_rag.ingest_all(force_reindex=force_reindex)
 
 
     def ingest_firm(self, force_reindex=False) -> None:
-        """
-        Ingest all PDF documents and build text and image-based vector indices.
-
-        This method must be called before querying, unless precomputed indices already exist.
-        """
         self.firm_rag.ingest_all(force_reindex=force_reindex)
 
 
