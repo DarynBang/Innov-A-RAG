@@ -2,21 +2,6 @@
 agents/market_analysts/market_opportunity_agent.py
 """
 
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-from agents.base import BaseAgent
-from config.prompt import MARKET_RISK_PROMPT_NO_PATENT, MARKET_RISK_PROMPT_WITH_PATENT
-from langchain_core.prompts import PromptTemplate
-from langchain.schema import HumanMessage
-from langchain_openai import ChatOpenAI
-from langchain_core.output_parsers import StrOutputParser
-from langchain import HuggingFacePipeline
-from langchain_google_genai import ChatGoogleGenerativeAI
-from utils.model_utils import get_qwen_vl_model_and_processor
-from transformers import pipeline
-
 class MarketRiskAgent(BaseAgent):
     def __init__(self, name="MergeAgent", qa_model="openai"):
         super().__init__(name)
@@ -24,9 +9,21 @@ class MarketRiskAgent(BaseAgent):
 
         # Instantiate the raw LLM (no prompt bound yet)
         if qa_model == "openai":
+            import os
+
+            if "OPENAI_API_KEY" not in os.environ:
+                from dotenv import load_dotenv
+                load_dotenv()
+                logger.info("Loaded .env for OpenAI credentials")
             self.llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
 
         elif "gemini" in qa_model:
+            import os
+
+            if "GENAI_API_KEY" not in os.environ:
+                from dotenv import load_dotenv
+                load_dotenv()
+                logger.info("Loaded .env for Gemini credentials")
             self.llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
 
         elif "qwen" in qa_model:
@@ -101,5 +98,3 @@ class MarketRiskAgent(BaseAgent):
         except Exception as e:
                 logger.error("MarketRiskAgent failed:", exc_info=e)
                 return "Failed to assess risks in the Market."
-
-
