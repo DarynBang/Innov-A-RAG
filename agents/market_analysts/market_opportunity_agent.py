@@ -25,9 +25,21 @@ class MarketOpportunityAgent(BaseAgent):
 
         # Instantiate the raw LLM (no prompt bound yet)
         if qa_model == "openai":
+            import os
+
+            if "OPENAI_API_KEY" not in os.environ:
+                from dotenv import load_dotenv
+                load_dotenv()
+                logger.info("Loaded .env for OpenAI credentials")
             self.llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
 
         elif "gemini" in qa_model:
+            import os
+
+            if "GENAI_API_KEY" not in os.environ:
+                from dotenv import load_dotenv
+                load_dotenv()
+                logger.info("Loaded .env for Gemini credentials")
             self.llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
 
         elif "qwen" in qa_model:
@@ -103,5 +115,3 @@ class MarketOpportunityAgent(BaseAgent):
         except Exception as e:
             logger.error("MarketOpportunityAgent failed:", exc_info=e)
             return "Failed to generate market opportunities."
-
-
