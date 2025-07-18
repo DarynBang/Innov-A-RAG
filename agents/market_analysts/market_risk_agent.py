@@ -1,18 +1,5 @@
 """
-agents/market_opportunity_agent.py
-
-This module defines the `MergeAgent`, responsible for synthesizing multiple generalized sub-answers
-into a single coherent summary. It leverages a language model (e.g., GPT-4o or Qwen) to produce
-a natural and non-redundant final response.
-
-Key Features:
-- Maintains internal memory of previously seen sub-answers across multiple runs.
-- Uses `MERGE_PROMPT` to guide the LLM in combining multiple answer strings fluently.
-- Supports both OpenAI and HuggingFace-based LLMs via LangChain pipelines.
-
-Typical Usage:
-    agent = MergeAgent(qa_model="openai")
-    final_summary = agent.run({"generalized_answers": list_of_answers})
+agents/market_analysts/market_opportunity_agent.py
 """
 
 import logging
