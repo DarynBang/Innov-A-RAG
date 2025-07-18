@@ -1,21 +1,5 @@
 """
-agents/market_manager_agent.py
-
-This module defines the `VerifierAgent`, responsible for evaluating the final merged answer
-in a multi-agent RAG system. It assesses answer quality based on relevance, completeness,
-correctness, and clarity, then returns a score and feedback.
-
-Core Features:
-- Uses a configurable LLM (OpenAI or HuggingFace-based) to evaluate generated answers.
-- Parses response to extract evaluation text, score (1-10), and follow-up questions.
-- Determines whether the answer needs improvement based on a score threshold.
-
-Typical Usage:
-    agent = VerifierAgent(qa_model="openai", threshold=7)
-    feedback = agent.run({
-        "question": "What is Tesla's expansion plan?",
-        "merged_answer": "Tesla will open a factory in Singapore..."
-    })
+agents/market_analysts/market_manager_agent.py
 """
 
 import logging
