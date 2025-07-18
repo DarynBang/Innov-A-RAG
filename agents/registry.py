@@ -7,16 +7,6 @@ It defines and exposes a dictionary `AGENTS` that maps agent names (as strings)
 to their corresponding agent class implementations. This allows dynamic and
 configurable agent instantiation in the `MultiAgentRunner`.
 
-Registered Agents:
-- "TextAgent": Handles textual context responses.
-- "ImageAgent": Handles visual context responses (e.g., image-based reasoning).
-- "GeneralizeAgent": Merges or synthesizes outputs from multiple agents.
-- "FinalizeAgent": Produces the final answer for the user based on intermediate outputs.
-
-Usage:
-    from agents.registry import AGENTS
-    agent_class = AGENTS["TextAgent"]
-    agent_instance = agent_class(name="TextAgent", qa_model="gpt")
 """
 
 import logging
