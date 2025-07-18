@@ -25,9 +25,21 @@ class MarketManagerAgent(BaseAgent):
 
         # Instantiate the raw LLM (no prompt bound yet)
         if qa_model == "openai":
+            import os
+
+            if "OPENAI_API_KEY" not in os.environ:
+                from dotenv import load_dotenv
+                load_dotenv()
+                logger.info("Loaded .env for OpenAI credentials")
             self.llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
 
         elif "gemini" in qa_model:
+            import os
+
+            if "GENAI_API_KEY" not in os.environ:
+                from dotenv import load_dotenv
+                load_dotenv()
+                logger.info("Loaded .env for Gemini credentials")
             self.llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
 
         elif "qwen" in qa_model:
@@ -58,22 +70,6 @@ class MarketManagerAgent(BaseAgent):
         self.parser = StrOutputParser()
 
     def run(self, input_data: dict) -> str:
-        """
-        Evaluates the merged answer against the original user question using a scoring rubric.
-
-        Args:
-            input_data (dict): Dictionary with the following keys:
-                - 'question' (str): The original user question.
-                - 'merged_answer' (str): The answer to evaluate.
-
-        Returns:
-            dict: A dictionary containing:
-                - 'score' (int): Score between 1 and 10.
-                - 'needs_retry' (bool): True if score < threshold.
-                - 'evaluation' (str): Explanation of the score.
-                - 'merged_answer' (str): The original answer evaluated.
-                - 'follow_up_questions' (list[str], optional): Suggestions for improvement if needed.
-        """
         query = input_data.get("question")
         patent_abstract = input_data.get('patent_abstract', None)
 
