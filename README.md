@@ -2,7 +2,7 @@
 
 Run code to save firm summary and patents first -> Process query, either with patent or not.
 
-### Things still need to add.consider:
+### Things still need to add/consider:
 - QueryNormalizingAgent/PlanningAgent: -> direct workflow
 - Hybrid Retrieval (Dense + Sparse): Augment vector search with a traditional sparse index (e.g. BM25) over raw text or keywords. Blend scores to maintain recall in case embeddings miss niche terms.
 - ConsistencyAgent/FactCheckingAgent: add between Opportunity/Risk and Manager to flag glaring contradictions or hallucinations. (Considering)
