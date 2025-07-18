@@ -17,6 +17,6 @@ This project is licensed under the **MIT License**. See [`LICENSE`](./LICENSE) f
 
 ## Author
 
-This project was co-authored with Nguyen Quang Phu (pdz1804)
+This project was co-authored with [Nguyen Quang Phu (pdz1804)](https://github.com/pdz1804)
 
 ---
