@@ -1,117 +1,5 @@
 
 # config/prompt.py
-TEXT_PROMPT_TEMPLATE = """
-You are a helpful assistant analyzing text content to answer a specific question.
-
-Instructions:
-1. Think step-by-step.
-2. Use only the given context — do not assume external knowledge.
-3. Respond in 3-4 sentences with:
-   - A clear answer
-   - Explanation or reasoning if needed
-   - Source citation if possible (e.g., [Page 3], [Doc: fileX])
-4. If no relevant info is found, return: "No answer found."
----
-
-Context:
-{context}
-
-Question:
-{query}
-
-Answer:
-"""
-
-IMAGE_PROMPT_TEMPLATE = """
-You are a visual assistant. Use the provided images to answer the question.
-
-Instructions:
-- Think visually. Refer to diagrams, labels, or visual elements.
-- Focus on relevant parts only.
-- If necessary, cite where the information appears (e.g., [Figure 1], [Page 2])
-- If no helpful info is found, respond: "No answer found."
----
-
-Question:
-{query}
-
-Answer:
-"""
-
-GENERALIZED_PROMPT = """
-You are a generalizing agent that merges answers from multiple modalities (e.g., text and image) into a single coherent response.
-
-Your task:
-- Combine useful insights from both the text-based and image-based answers.
-- Use step-by-step reasoning to determine how to integrate them meaningfully.
-- Be fluent, informative, and concise. Remove redundancy, contradictions, or vague statements.
-- Use citations if present (e.g., [Doc: XYZ], [Fig. 2]), and format the final answer as a well-written paragraph.
-
-Instructions:
-1. Read both the text and image answers carefully.
-2. Identify whether both, one, or neither contains valuable content.
-3. If both are useful: integrate them naturally in a fluent summary.
-4. If only one is useful: return only that, in polished form.
-5. If neither are useful: respond with "No answer found."
-6. Avoid listing responses — your job is to synthesize, not summarize.
-
-Chain-of-Thought Reasoning Steps:
-- Which answer provides factual grounding?
-- Which answer adds complementary insights?
-- How can they be merged while avoiding repetition?
-- What is the most fluent and natural ordering?
-
----
-
-Example 1:
-
-Text-based Answer:
-Tesla aims to expand into Southeast Asia, beginning with Singapore. [Doc: Tesla2024Report]
-
-Image-based Answer:
-A chart shows projected demand for EVs in Vietnam and Thailand by 2025.
-
-Final Combined Answer:
-Tesla plans to expand into Southeast Asia, starting with a factory in Singapore. Forecasts show rising EV demand in Vietnam and Thailand by 2025. [Tesla2024Report, Fig. 2]
-
----
-
-Example 2:
-
-Text-based Answer:
-The company is headquartered in New York and specializes in AI-driven financial platforms. [Doc 1]
-
-Image-based Answer:
-No relevant diagrams or data were found in the image.
-
-Final Combined Answer:
-The company is based in New York and focuses on developing AI-driven financial technologies. [Doc 1]
-
----
-
-Example 3:
-
-Text-based Answer:
-(No useful information found.)
-
-Image-based Answer:
-The dashboard interface includes advanced trend analysis and anomaly detection features.
-
-Final Combined Answer:
-The product's dashboard interface offers advanced trend analysis and anomaly detection capabilities.
-
----
-
-Now process the following:
-
-Text-based Answer:
-{text_answer}
-
-Image-based Answer:
-{image_answer}
-
-Final Combined Answer:
-"""
 
 PLANNING_PROMPT_JSON = """
 You are a planning agent. Your task is to decompose a complex user query into 2-3 subtasks.
@@ -146,125 +34,140 @@ User Query:
 {question}
 """
 
-# Simple bullet-style prompt (for Qwen and other small LMs)
-PLANNING_PROMPT_SIMPLE = """
-You are a helpful assistant that breaks down complex user questions into smaller parts.
-
-Instructions:
-- Think step by step.
-- Identify the key components of the user's question.
-- Write 2-3 independent sub-questions using bullet points.
-
-Example:
-
-User Question:
-What are the risks and benefits of using AI in education?
-
-- What are the risks of using AI in education?
-- What are the benefits of using AI in education?
+GENERALIZE_PROMPT_TEMPLATE = """You are a market analyst. Synthesize the provided firm summary and patent abstract information to answer the question concisely and insightfully.
+## Firm Summary:
+{firm_summary_context}
 
 ---
+## Patent Information:
+{patent_context}
 
-User Question:
-{question}
+---
+## Question:
+{query}
+
+---
+## Answer:
 """
 
-MERGE_PROMPT = """
-You are a summarizing agent responsible for combining multiple well-structured answers from different sub-questions into a single coherent summary.
+MARKET_OPPORTUNITY_PROMPT_WITH_PATENT = """You are an expert market strategist. Use the following information to identify the most promising business opportunities that **build directly on the user’s patent**:
+• **Generalized Context:**  
+{general_summary}
 
-Each input corresponds to a separate sub-question and has already been generalized and refined. Your job is to:
-- Read and understand each of these answers.
-- Eliminate redundancy, contradiction, and irrelevant parts.
-- Integrate the information into a **fluent, natural, and informative** final summary.
-- Maintain any citations (e.g., [Doc 1], [Page 3]) from the original answers.
-- If there is insufficient useful information, return: **"Insufficient data to form a complete answer."**
+• **User Query:**  
+{query}
 
-Chain-of-Thought Instructions:
-1. Read each answer and extract its key message.
-2. Identify overlapping or related insights and merge them.
-3. Omit repeated facts or vague/unverified claims.
-4. Structure the output logically from general to specific ideas.
-5. Aim for clarity, professionalism, and readability.
+• **Patent Abstract:**  
+{patent_abstract}
 
----
+**Task:**  
+1. Highlight 3–5 specific applications or market niches where the patented technology could unlock value.  
+2. For each opportunity, name the target industry, describe the unmet need, and explain how the patent’s key features address it.  
+3. Flag any regulatory, technical, or competitive barriers the user should keep in mind.
 
-Example:
-
-Subtask Answers:
-Tesla plans to expand into Southeast Asia, beginning with a factory in Singapore by 2024. [Doc 1]  
-EV demand in Vietnam and Thailand is projected to grow by 35% annually until 2025. [Doc 2]  
-There may be delays in the factory launch due to chip shortages. [Doc 3]
-
-Final Summary:
-Tesla is expanding into Southeast Asia, starting with a new factory in Singapore by 2024. EV demand is rising rapidly in countries like Vietnam and Thailand, though potential chip shortages could delay operations. [Doc 1, Doc 2, Doc 3]
-
----
-
-Subtask Answers:
-{answers}
-
-Final Summary:
+**Output format:**  
+- Numbered list (1., 2., …)  
+- Each item with a one‑sentence “Opportunity” headline and a 2–3 sentence justification. 
 """
 
-VERIFICATION_PROMPT = """
-You are a verifier agent. Your job is to evaluate how well the given answer addresses the user's question.
+MARKET_OPPORTUNITY_PROMPT_NO_PATENT = """You are an expert market strategist. Based solely on the user’s query and the broader market and firm context, suggest where they should focus for maximum impact:
+• **Generalized Context:**  
+{general_summary}
 
-You must follow the Instructions:
-1. Step-by-step, evaluate the following:
-   - Relevance: Does the answer directly respond to the question?
-   - Completeness: Does it cover all parts of the question?
-   - Correctness: Is the information accurate and based on context?
-   - Clarity: Is the answer well-written and understandable?
+• **User Query:**  
+{query}
 
-2. Write a short paragraph justifying your score. Mention:
-   - Strengths (e.g., directness, depth, correctness)
-   - Weaknesses (e.g., vague, missing info, hallucinations)
+**Task:**  
+1. Propose 3–5 high‑potential market opportunities aligned with the user’s goals.  
+2. For each, specify the industry segment, the core need or pain point, and why it matters now.  
+3. Include a brief note on any required partnerships, technologies, or go‑to‑market considerations.
 
-3. Finally, provide a score from 1 to 10.
-   - 10: Perfect — directly answers, fully accurate and clear
-   - 7-9: Good — mostly complete and accurate with minor flaws
-   - 4-6: Weak — partial answer, some issues
-   - 1-3: Poor — irrelevant, incorrect, or vague
+**Output format:**  
+- Numbered list (1., 2., …)  
+- Each item with a one‑sentence “Opportunity” headline and a 2–3 sentence justification.
+"""
 
-4. If score < 7, propose 2-3 specific follow-up questions to improve the answer.
+MARKET_RISK_PROMPT_WITH_PATENT = """You are a seasoned market risk analyst. Using the information below, identify the key risks the user should avoid when pursuing opportunities **based on their patent**:
+• **Generalized Context:**  
+{general_summary}
 
-Output Format:
+• **User Query:**  
+{query}
 
-Answer Evaluation:
-<your detailed justification>
+• **Patent Abstract:**  
+{patent_abstract}
 
-Score: <number from 1 to 10>
+**Task:**  
+1. List 3–5 specific risks or threats that pertain directly to the patented technology.  
+2. For each risk, specify its nature (e.g., technical, regulatory, competitive, IP‑related) and explain why it matters.  
+3. Suggest one mitigation strategy or precaution for each risk.
 
-Follow-Up Questions:
-- Question 1
-- Question 2
-- Question 3
+**Output format:**  
+- Numbered list (1., 2., …)  
+- Each item with a one‑sentence “Risk” headline and a 2–3 sentence explanation plus one‑sentence mitigation note.
+"""
 
----
+MARKET_RISK_PROMPT_NO_PATENT = """You are a seasoned market risk analyst. Based solely on the user’s query and the broader market and firm context, pinpoint the main risks they should avoid:
+• **Generalized Context:**  
+{general_summary}
 
-Question:
-What is Tesla's plan for international expansion?
+• **User Query:**  
+{query}
 
-Answer:
-Tesla plans to expand into Southeast Asia, starting with a factory in Singapore in 2024. [Doc 1]
+**Task:**  
+1. Identify 3–5 high‑impact market or operational risks aligned with the user’s objectives.  
+2. For each risk, describe its category (e.g., market saturation, regulatory hurdles, supply‑chain, competitive landscape) and its potential impact.  
+3. Propose one practical mitigation step or cautionary measure for each.
 
-Answer Evaluation:
-The answer is directly relevant to the question and mentions a concrete step Tesla is taking (opening a factory in Singapore). However, it could be more comprehensive by discussing other regions or challenges. Clarity is good, and the source is cited.
+**Output format:**  
+- Numbered list (1., 2., …)  
+- Each item with a one‑sentence “Risk” headline and a 2–3 sentence explanation plus one‑sentence mitigation note.
+"""
 
-Score: 8
+MARKET_MANAGER_PROMPT_WITH_PATENT = """You are a strategic advisor. Integrate the opportunity and risk analyses below—grounded in the user’s patent—to produce a concise, balanced recommendation for next steps.
+• **User Query:**  
+{query}
 
-Follow-Up Questions:
-- Does Tesla plan to expand beyond Singapore?
-- What challenges might affect Tesla's international expansion?
-- Are there any projected timelines for other countries?
+• **Patent Abstract:**  
+{patent_abstract}
 
----
+• **Market Opportunities (from MarketOpportunityAgent):**  
+{market_opportunities}
 
-Question:
-{question}
+• **Market Risks (from MarketRiskAgent):**  
+{market_risks}
 
-Answer:
-{answer}
+**Task:**  
+1. Summarize the top 2–3 opportunities that best leverage the patented technology.  
+2. Highlight the top 2–3 risks that could impede success.  
+3. For each paired opportunity & risk, suggest one concrete action or mitigation.  
+4. Conclude with a 2‑sentence executive recommendation on whether—and how—to proceed.
 
-Answer Evaluation:
+**Output Format:**  
+- Sectioned under headings: “Opportunities,” “Risks,” “Recommendations.”  
+- Bullet points under each heading.  
+- Use clear, direct language suitable for a C‑suite briefing.
+"""
+
+MARKET_MANAGER_PROMPT_NO_PATENT = """You are a strategic advisor. Based on the user’s needs and the market analyses below, produce a concise final plan of action.
+ **User Query:**  
+{query}
+
+• **Market Opportunities (from MarketOpportunityAgent):**  
+{market_opportunities}
+
+• **Market Risks (from MarketRiskAgent):**  
+{market_risks}
+
+**Task:**  
+1. Summarize the top 3 opportunities most aligned with the user’s goals.  
+2. Summarize the top 3 risks they must mitigate.  
+3. For each opportunity – risk pair, recommend one practical next step or precaution.  
+4. Finish with a 2‑sentence strategic recommendation on focus areas and timing.
+
+**Output Format:**  
+- Use headings: “Key Opportunities,” “Key Risks,” “Action Plan.”  
+- Numbered or bulleted lists under each.  
+- Tone: clear and executive‑ready.
+
 """
