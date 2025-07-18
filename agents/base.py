@@ -3,8 +3,8 @@ agents/base.py
 
 Defines the abstract base class for all agents in the multi-agent RAG system.
 
-The `BaseAgent` class serves as a template for specialized agents (e.g., TextAgent, ImageAgent, etc.)
-that participate in multimodal reasoning and generation tasks. Each concrete agent must implement
+The `BaseAgent` class serves as a template for specialized agents
+that participate in reasoning and generation tasks. Each concrete agent must implement
 the `run()` method with its own logic based on the input data and selected QA model.
 
 Attributes:
