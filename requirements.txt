@@ -1,0 +1,19 @@
+langgraph
+langchain
+ipython
+langchain_openai
+langchain_community
+dotenv
+typing
+chromadb
+langchain_chroma
+sentence-transformers
+google-generativeai
+streamlit 
+matplotlib
+bitsandbytes
+colpali_engine==0.3.10
+google-genai
+langchain_google_genai 
+# langchain-milvus 
+# pymilvus
