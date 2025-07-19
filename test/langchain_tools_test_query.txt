@@ -1,0 +1,7 @@
+| Category                  | Example Queries                                                                                                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Company RAG Retrieval** | - "What does AgriSmart do in the agriculture sector?"<br>- "Tell me about CyberShield's main business area."<br>- "What is RetailX focusing on?"                                                 |
+| **Patent RAG Retrieval**  | - "Are there any patents related to smart grids or energy management?"<br>- "Show me the AI applications in medical imaging patents."<br>- "List AutoDrive's work on autonomous vehicle safety." |
+| **Company Exact Info**    | - "Give me the full profile of FinSecure."<br>- "What is the detailed record for EcoEnergy?"                                                                                                     |
+| **Patent Exact Info**     | - "Show me the exact information of patent P017."<br>- "I need the details of patent P026."<br>- "What is patent P014 about?"                                                                    |
+| **Mixed / Open Query**    | - "Who is working on adaptive learning platforms?"<br>- "Which company is developing AI for crop monitoring?"<br>- "Tell me about AI in cybersecurity threats."                                  |

@@ -1,81 +1,81 @@
 """
-text_generation/text_captioning/qwen_runner.py
-
-This module defines the text captioning function for Qwen2.5-VL, used within the RAG system
-to answer user queries based on retrieved text chunks. It formats the inputs into a prompt,
-runs inference using a locally loaded Qwen2.5-VL model, and returns the generated answer.
-
-Function:
-- generate_caption_with_qwen(input_data: dict) -> str:
-    Accepts a user question and associated text context, formats them using a shared prompt template,
-    then runs the Qwen model to generate a concise answer.
-
-Key Features:
-- Loads the Qwen2.5-VL model and processor only once (singleton via `get_qwen_vl_model_and_processor()`).
-- Formats prompts using `TEXT_PROMPT_TEMPLATE` from `config.prompt`.
-- Uses Hugging Face-style `.generate()` and `.batch_decode()` to obtain the final output.
-- Logs input details and supports GPU execution with memory offloading.
-
-Usage:
-    from text_generation.text_captioning.qwen_runner import generate_caption_with_qwen
-    answer = generate_caption_with_qwen({"query": "What is Mamba?", "texts": "..."})
+Qwen 2.5-VL text generation runner.
 """
+from utils.logging_utils import setup_logging, get_logger
+setup_logging()
 
 import torch
-import os
-import logging
 from config.prompt import GENERALIZE_PROMPT_TEMPLATE
 from utils.model_utils import get_qwen_vl_model_and_processor
 
-# === Setup Logging ===
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# === Offload directory setup ===
-# os.makedirs("offload", exist_ok=True)
-# torch.set_default_dtype(torch.bfloat16)
+logger = get_logger(__name__)
 
 def generate_caption_with_qwen(input_data: dict) -> str:
-    query = input_data["query"]
-    patent_context = input_data["patent_context"]
-    firm_summary_context = input_data["firm_summary_context"]
-
+    """
+    Generate a response using Qwen 2.5-VL.
+    
+    Args:
+        input_data: dict with keys 'query', 'firm_summary_context', 'patent_context'
+        
+    Returns:
+        str: Generated response
+    """
+    query = input_data.get("query", "")
+    firm_summary_context = input_data.get("firm_summary_context", "")
+    patent_context = input_data.get("patent_context", "")
+    
     logger.info(f"[Qwen] Received query: {query}")
+    logger.info(f"[Qwen] Firm context length: {len(firm_summary_context)}")
+    logger.info(f"[Qwen] Patent context length: {len(patent_context)}")
 
-    # === Load Qwen2.5-VL (only once) ===
-    model, processor = get_qwen_vl_model_and_processor()
+    # Load Qwen2.5-VL model and processor
+    try:
+        model, processor = get_qwen_vl_model_and_processor()
+        logger.info("[Qwen] Model and processor loaded successfully")
+    except Exception as e:
+        logger.error(f"[Qwen] Error loading model: {e}")
+        return f"Error loading Qwen model: {str(e)}"
 
-    # === Begin captioning ===
+    # Format the prompt with correct parameter names
+    prompt = GENERALIZE_PROMPT_TEMPLATE.format(
+        query=query,
+        firm_summary_context=firm_summary_context,
+        patent_context=patent_context
+    )
 
-    prompt = GENERALIZE_PROMPT_TEMPLATE.format(query=query, patent_context=patent_context, firm_summary_context=firm_summary_context)
+    try:
+        logger.info("[Qwen] Generating response")
+        
+        # Prepare messages for Qwen
+        messages = [
+            {
+                "role": "user", 
+                "content": [{"type": "text", "text": prompt}]
+            }
+        ]
 
-    messages = [
-        {
-            "role": "user", 
-            "content": [{"type": "text", "text": prompt}]
-        }
-    ]
+        # Apply chat template and tokenize
+        text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        inputs = processor(text=[text], padding=True, return_tensors="pt")
+        inputs = inputs.to(model.device)
 
-    text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    inputs = processor(text=[text], padding=True, return_tensors="pt")
-    inputs = inputs.to(model.device)
+        # Generate response
+        with torch.no_grad():
+            generated_ids = model.generate(**inputs, max_new_tokens=512, temperature=0.0)
+            generated_ids_trimmed = [out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)]
+            output_text = processor.batch_decode(generated_ids_trimmed, skip_special_tokens=True)
 
-    # print("\n--- Inputs to Textual Model.generate() ---")
-    # for k, v in inputs.items():
-    #     if isinstance(v, torch.Tensor):
-    #         print(f"{k}: shape={v.shape}, dtype={v.dtype}, device={v.device}")
-    #     else:
-    #         print(f"{k}: type={type(v)}, value={v}")
-    # print("----------------------------------\n")
+        # Clean up GPU memory
+        inputs.to("cpu")
+        del generated_ids, generated_ids_trimmed, inputs
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
-    generated_ids = model.generate(**inputs, max_new_tokens=512)
-    generated_ids_trimmed = [out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)]
-    output_text = processor.batch_decode(generated_ids_trimmed, skip_special_tokens=True)
-
-    inputs.to("cpu")
-    del generated_ids, generated_ids_trimmed, inputs
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-
-    return output_text[0]
+        result = output_text[0].strip()
+        logger.info(f"[Qwen] Generated response length: {len(result)}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"[Qwen] Error generating response: {e}")
+        return f"Error generating response: {str(e)}"
 

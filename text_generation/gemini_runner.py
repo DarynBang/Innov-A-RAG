@@ -1,62 +1,69 @@
 """
-text_generation/text_captioning/gemini_runner.py
-
-This module defines a text captioning function using the Gemini 2.0 Flash model
-from Google Generative AI. It is used as one of the backends in the RAG pipeline
-for generating answers based on retrieved text chunks.
-
-Function:
-- generate_caption_with_gemini(input_data: dict) -> str:
-    Accepts a user query and a string of retrieved context.
-    Formats them using a shared prompt template (`TEXT_PROMPT_TEMPLATE`)
-    and sends the prompt to Gemini 2.0 Flash for content generation.
-
-Key Features:
-- Loads Gemini API client once and reuses it for efficiency.
-- Uses the prompt template defined in `config.prompt`.
-- Returns a clean textual answer or error fallback.
-
-Usage:
-    from text_generation.text_captioning.gemini_runner import generate_caption_with_gemini
-    answer = generate_caption_with_gemini({"query": "What is Mamba?", "texts": "..."})
+Gemini 2.0 Flash text generation runner.
 """
+from utils.logging_utils import setup_logging, get_logger
+setup_logging()
 
-import logging
-from google import genai
+import os
 from dotenv import load_dotenv
+import google.generativeai as genai
 from config.prompt import GENERALIZE_PROMPT_TEMPLATE
 
-# === Setup ===
-load_dotenv()
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+logger = get_logger(__name__)
 
-try:
-    client = genai.Client()
-    logger.info("✅ Gemini client initialized")
-except Exception as e:
-    logger.error(f"Failed to initialize Gemini client: {e}")
-    client = None
+# Load environment variables
+if "GENAI_API_KEY" not in os.environ:
+    load_dotenv()
+    logger.info("Loaded .env for Gemini credentials")
+
+GENAI_API_KEY = os.getenv("GENAI_API_KEY")
+if not GENAI_API_KEY:
+    logger.error("GENAI_API_KEY not found in environment")
+else:
+    genai.configure(api_key=GENAI_API_KEY)
 
 def generate_caption_with_gemini(input_data: dict) -> str:
+    """
+    Generate a response using Gemini 2.0 Flash.
+    
+    Args:
+        input_data: dict with keys 'query', 'firm_summary_context', 'patent_context'
+        
+    Returns:
+        str: Generated response
+    """
     query = input_data.get("query", "")
     firm_summary_context = input_data.get("firm_summary_context", "")
     patent_context = input_data.get("patent_context", "")
+    
     logger.info(f"[Gemini] Received query: {query}")
+    logger.info(f"[Gemini] Firm context length: {len(firm_summary_context)}")
+    logger.info(f"[Gemini] Patent context length: {len(patent_context)}")
 
-    if client is None:
-        return "Gemini client not initialized."
-
-    prompt = GENERALIZE_PROMPT_TEMPLATE.format(query=query, patent_context=patent_context, firm_summary_context=firm_summary_context)
+    # Format the prompt with correct parameter names
+    prompt = GENERALIZE_PROMPT_TEMPLATE.format(
+        query=query,
+        firm_summary_context=firm_summary_context,
+        patent_context=patent_context
+    )
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=[prompt]
+        logger.info("[Gemini] Sending request to Gemini 2.0 Flash")
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        response = model.generate_content(
+            prompt,
+            generation_config={
+                "temperature": 0.0,
+                "max_output_tokens": 1024,
+            }
         )
-        return response.text.strip()
+        
+        result = response.text.strip()
+        logger.info(f"[Gemini] Generated response length: {len(result)}")
+        return result
+        
     except Exception as e:
-        logger.error(f"Gemini API call failed: {e}")
-        return "Gemini failed to generate a response."
+        logger.error(f"[Gemini] Error generating response: {e}")
+        return f"Error generating response: {str(e)}"
 
 

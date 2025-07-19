@@ -46,10 +46,10 @@ class InnovARAG_Pipeline:
 
         if ingest_only is False:
             # one global qa_model for all agents (you could customize per‐agent too)
-            qa_generalize = agent_config.get("qa_generalize", "qwen")
-            qa_market_opportunity = agent_config.get("qa_market_opportunity", "gemini")
-            qa_market_risk = agent_config.get("qa_market_risk", "gemini")
-            qa_market_manager = agent_config.get("qa_market_manager", 'gemini')
+            qa_generalize = agent_config.get("qa_generalize", "openai")
+            qa_market_opportunity = agent_config.get("qa_market_opportunity", "openai")
+            qa_market_risk = agent_config.get("qa_market_risk", "openai")
+            qa_market_manager = agent_config.get("qa_market_manager", 'openai')
 
             self.multi_agent = MultiAgentRunner()
 

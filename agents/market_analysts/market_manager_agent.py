@@ -1,121 +1,116 @@
 """
-agents/market_analysts/market_manager_agent.py
+MarketManagerAgent: Synthesizes the final answer using the selected LLM and outputs from opportunity/risk agents.
 """
-
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from utils.logging_utils import setup_logging, get_logger
+setup_logging()
 
 from agents.base import BaseAgent
-from config.prompt import MARKET_MANAGER_PROMPT_NO_PATENT, MARKET_MANAGER_PROMPT_WITH_PATENT
-from langchain_core.prompts import PromptTemplate
-from langchain.schema import HumanMessage
+from config.prompts import (
+    MARKET_MANAGER_AGENT_SYSTEM_PROMPT,
+    MARKET_MANAGER_AGENT_USER_PROMPT,
+    DEFAULT_MODELS
+)
 from langchain_openai import ChatOpenAI
-from langchain_core.output_parsers import StrOutputParser
-from langchain import HuggingFacePipeline
+from langchain_community.llms import Ollama
 from langchain_google_genai import ChatGoogleGenerativeAI
-from utils.model_utils import get_qwen_vl_model_and_processor
-from transformers import pipeline
+from langchain_core.messages import SystemMessage, HumanMessage
+
+logger = get_logger(__name__)
 
 class MarketManagerAgent(BaseAgent):
     def __init__(self, name="MarketManagerAgent", qa_model="openai"):
-        super().__init__(name)
-        self.qa_model = qa_model
+        super().__init__(name, qa_model)
         logger.info(f"Initializing MarketManagerAgent with model: {qa_model}")
-
-        # Instantiate the raw LLM (no prompt bound yet)
-        if qa_model == "openai":
-            import os
-
-            if "OPENAI_API_KEY" not in os.environ:
-                from dotenv import load_dotenv
-                load_dotenv()
-                logger.info("Loaded .env for OpenAI credentials")
-            self.llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
-
-        elif "gemini" in qa_model:
-            import os
-
-            if "GENAI_API_KEY" not in os.environ:
-                from dotenv import load_dotenv
-                load_dotenv()
-                logger.info("Loaded .env for Gemini credentials")
-            self.llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
-
-        elif "qwen" in qa_model:
-            model, processor = get_qwen_vl_model_and_processor()
-            self.llm = HuggingFacePipeline(
-                pipeline=pipeline(
-                    "text-generation",
-                    model=model,
-                    tokenizer=processor.tokenizer,
-                    device_map="auto",
-                    return_full_text=False,  # <-- key change
-                    max_new_tokens=1024,  # or whatever you need
-                    clean_up_tokenization_spaces=True
+        
+        self.llm_type = qa_model
+        self.llm = self._initialize_llm()
+        
+        # Initialize tools dictionary for future extensibility
+        self.tools = {}
+        logger.info("MarketManagerAgent initialization completed")
+    
+    def _initialize_llm(self):
+        """Initialize the language model based on the specified type."""
+        try:
+            if self.llm_type == "openai":
+                return ChatOpenAI(
+                    model=DEFAULT_MODELS["openai"],
+                    temperature=0.1
                 )
-            )
-        else:
-            raise ValueError(f"Unknown qa_model: {qa_model!r}")
+            elif self.llm_type == "gemini":
+                return ChatGoogleGenerativeAI(
+                    model=DEFAULT_MODELS["gemini"],
+                    temperature=0.1
+                )
+            elif self.llm_type == "qwen":
+                return Ollama(
+                    model=DEFAULT_MODELS["qwen"],
+                    temperature=0.1
+                )
+            else:
+                raise ValueError(f"Unsupported LLM type: {self.llm_type}")
+                
+        except Exception as e:
+            logger.error(f"Failed to initialize {self.llm_type} LLM: {str(e)}")
+            raise
 
-        # Load both templates
-        self.prompt_with_patent = PromptTemplate.from_template(
-            MARKET_MANAGER_PROMPT_WITH_PATENT
-        )
-        self.prompt_without_patent = PromptTemplate.from_template(
-            MARKET_MANAGER_PROMPT_NO_PATENT
-        )
-
-        # Parser for the output
-        self.parser = StrOutputParser()
+    def register_tools(self, tools: dict):
+        """Register tools for potential future use."""
+        self.tools.update(tools)
+        logger.info(f"Registered {len(tools)} tools: {list(tools.keys())}")
 
     def run(self, input_data: dict) -> str:
-        query = input_data.get("question")
-        patent_abstract = input_data.get('patent_abstract', None)
-
-        market_opportunities = input_data.get("MarketOpportunityAgent", None)
-        market_risks = input_data.get("MarketRiskAgent", None)
-
-        logger.info("Running MarketManagerAgent system")
-
-        if not market_opportunities or not market_risks or not query:
-            logger.warning("⚠️ Missing contexts or question")
+        """
+        Synthesize the final answer using the selected LLM and outputs from opportunity/risk agents.
+        
+        Args:
+            input_data: dict with outputs from previous agents
+            
+        Returns:
+            str: final answer
+        """
+        opportunities = input_data.get("opportunity_analysis", "")
+        risks = input_data.get("risk_analysis", "")
+        question = input_data.get("question")
+        synthesis_result = input_data.get("synthesis_result", "")
+        
+        logger.info(f"MarketManagerAgent processing query: {question}")
+        logger.info(f"Opportunities length: {len(opportunities)} characters")
+        logger.info(f"Risks length: {len(risks)} characters")
+        
+        if not opportunities or not risks or not question:
+            logger.warning("Missing contexts or question")
             return "No context to synthesize final output"
-
-        if patent_abstract:
-            logger.info("Found patent abstract for MarketManagerAgent")
-            template = self.prompt_with_patent
-            prompt_input = {
-                "market_opportunities": market_opportunities,
-                "market_risks": market_risks,
-                "query": query,
-                "patent_abstract": patent_abstract
-            }
-        else:
-            logger.info("Patent abstract not found for MarketManagerAgent")
-            template = self.prompt_without_patent
-            prompt_input = {
-                "market_opportunities": market_opportunities,
-                "market_risks": market_risks,
-                "query": query
-            }
-
-        prompt_text = template.format(**prompt_input)
-        # Render and invoke the LLM
+        
         try:
-            if isinstance(self.llm, HuggingFacePipeline):
-                llm_output = self.llm(prompt_text)
-                final = self.parser.parse(llm_output)
+            # Create the prompt
+            user_prompt = MARKET_MANAGER_AGENT_USER_PROMPT.format(
+                query=question,
+                opportunity_analysis=opportunities,
+                risk_analysis=risks
+            )
+            
+            # Prepare messages
+            messages = [
+                SystemMessage(content=MARKET_MANAGER_AGENT_SYSTEM_PROMPT),
+                HumanMessage(content=user_prompt)
+            ]
+            
+            logger.info("Invoking LLM for final synthesis")
+            
+            # Get response from LLM
+            response = self.llm.invoke(messages)
+            
+            # Extract content
+            if hasattr(response, 'content'):
+                result = response.content
             else:
-                messages = [
-                    HumanMessage(content=prompt_text)
-                ]
-                llm_response = self.llm(messages)
-                final = self.parser.parse(llm_response.content)
-
-            return final
-
+                result = str(response)
+            
+            logger.info(f"Generated final synthesis length: {len(result)} characters")
+            return result
+            
         except Exception as e:
-            logger.error("MarketManagerAgent failed:", exc_info=e)
-            return "Failed to synthesize final suggestion in the Market."
+            logger.error(f"Error in final synthesis: {e}")
+            return f"Error synthesizing final output: {str(e)}"
 

@@ -1,9 +1,20 @@
 # config/agent_config.py
 
+# Default LLM type for all agents (options: "openai", "gemini", "qwen")
+DEFAULT_LLM_TYPE = "gemini"
+
+# Agent-specific LLM configurations
 agent_config = {
-    # Shared QA model name for all agents - text (currently support: "qwen", "gemini", "openai")
-    "qa_generalize": "qwen",
-    "qa_market_opportunity": "qwen",
-    "qa_market_risk": "qwen",
-    "qa_market_manager": "gemini",
+    # Core workflow agents
+    "planning_agent": "gemini",
+    "normalize_query_agent": "gemini", 
+    "generalize_agent": "gemini",
+
+    # Market analysis agents
+    "market_opportunity_agent": "gemini",
+    "market_risk_agent": "gemini",
+    "market_manager_agent": "gemini",
+    
+    # Validation agents
+    "fact_checking_agent": "gemini",
 }

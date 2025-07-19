@@ -12,7 +12,7 @@ patent_config = {
 }
 
 firm_config = {
-    "firm_csv": r'firms_1000_summary.csv',               # <- Path to firm csv file
+    "firm_csv": r'firms_summary.csv',               # <- Path to firm csv file
     "embed_model": "sentence-transformers/all-MiniLM-L6-v2",          # or 'mpnet', 'bge'
     "top_k": 3,
     "output_subdir": r"firm_summary_index",
