@@ -9,7 +9,6 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 import pandas as pd
 from config.rag_config import firm_config
 
-
 class FirmSummaryRAG:
     def __init__(
         self,
@@ -17,7 +16,6 @@ class FirmSummaryRAG:
         index_dir: str,
         config: dict
     ):
-
         # Data + paths
         self.df = df
         self.index_dir = index_dir
@@ -196,7 +194,6 @@ class FirmSummaryRAG:
         print(f"Number of total chunks: {len(self.all_chunks)} chunks")
         return collection
 
-
     def retrieve_firm_contexts(
         self,
         query: str,
@@ -241,11 +238,10 @@ class FirmSummaryRAG:
 
         return contexts
 
-
 def main():
     # CONFIGURATION
     INDEX_DIR = r"RAG_INDEX"
-    firm_csv = r'firms_1000_summary.csv'
+    firm_csv = r'data/firms_1000_summary.csv'
 
     firm_df = pd.read_csv(firm_csv)
 
@@ -275,7 +271,6 @@ def main():
     results = firm_rag.retrieve_firm_contexts("Machine Learning and Computer Vision", top_k=3)
     for hit in results:
         print(f"{hit['rank']}. [{hit['score']:.3f}] {hit['company_name']} → “{hit['chunk'][:80]}…”")
-
 
 if __name__ == '__main__':
     main()

@@ -79,3 +79,5 @@ def format_hybrid_retrieval_result(result: Dict[str, Any]) -> str:
             formatted += f"{i}. Patent {context['patent_id']} ({context['company_name']})\n{context['chunk']}\n\n"
     
     return formatted 
+
+

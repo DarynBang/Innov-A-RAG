@@ -11,13 +11,10 @@ from config.prompts import (
     MARKET_OPPORTUNITY_AGENT_USER_PROMPT,
     DEFAULT_MODELS
 )
-from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
-from langchain_core.output_parsers import StrOutputParser
 from langchain_community.llms import Ollama
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage
-from typing import Dict, Any
 
 logger = get_logger(__name__)
 
@@ -148,3 +145,5 @@ class MarketOpportunityAgent(BaseAgent):
                     context_parts.append(f"Context {i} (Tool: {tool}):\n{result}")
         
         return "\n\n".join(context_parts) if context_parts else "No context available"
+
+

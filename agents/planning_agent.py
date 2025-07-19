@@ -7,13 +7,12 @@ to be split into multiple focused subquestions for better processing and analysi
 
 import json
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.llms import Ollama
 from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_core.output_parsers import StrOutputParser
 
 from config.prompts import (
     PLANNING_AGENT_SYSTEM_PROMPT,
@@ -23,7 +22,6 @@ from config.prompts import (
 from utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
-
 
 class PlanningAgent:
     """
@@ -188,6 +186,7 @@ class PlanningAgent:
             logger.error(f"Error parsing planning response: {e}")
             raise
     
+    # This is defined but not used yet
     def get_subquestions(self, query: str) -> List[str]:
         """
         Get the list of subquestions for a given query.
@@ -208,6 +207,7 @@ class PlanningAgent:
             logger.error(f"Error getting subquestions: {e}")
             return [query]  # Return original query as fallback
     
+    # This is defined but not used yet
     def should_split_query(self, query: str) -> bool:
         """
         Determine if a query should be split into subquestions.
@@ -225,3 +225,5 @@ class PlanningAgent:
         except Exception as e:
             logger.error(f"Error determining if query should be split: {e}")
             return False  # Conservative fallback - don't split if unsure 
+        
+        

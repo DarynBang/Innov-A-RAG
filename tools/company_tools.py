@@ -145,3 +145,4 @@ def company_rag_retrieval_tool(query: str, top_k: int = 5) -> str:
         result += f"\n{i}. {context['company_name']}\n{context['chunk']}\n"
     
     return result 
+

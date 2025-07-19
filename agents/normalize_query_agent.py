@@ -7,23 +7,18 @@ from utils.logging_utils import setup_logging, get_logger
 setup_logging()
 
 from agents.base import BaseAgent
-from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
-from langchain_core.output_parsers import StrOutputParser
-from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.llms import Ollama
 from langchain_core.messages import SystemMessage, HumanMessage
-from utils.model_utils import get_qwen_vl_model_and_processor
 from config.prompts import (
     NORMALIZE_AGENT_SYSTEM_PROMPT,
     NORMALIZE_AGENT_USER_PROMPT,
     DEFAULT_MODELS
 )
-from transformers import pipeline
 import json
 import re
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
 logger = get_logger(__name__)
 
@@ -206,6 +201,7 @@ class NormalizeQueryAgent(BaseAgent):
                 "error": str(e)
             }
 
+    # This is defined but not used yet
     def run(self, input_data: dict) -> dict:
         """
         Normalize and classify the user query (maintaining backward compatibility).
@@ -367,3 +363,5 @@ class NormalizeQueryAgent(BaseAgent):
             "keywords": query.split(),
             "normalized_query": query
         } 
+        
+        

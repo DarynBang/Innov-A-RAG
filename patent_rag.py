@@ -194,7 +194,6 @@ class PatentRAG:
         print(f"Added {len(chunks)} chunks for Patent {patent_id} of Company {company_id}.")
         return collection
 
-
     def retrieve_patent_contexts(
         self,
         query: str,
@@ -239,11 +238,10 @@ class PatentRAG:
 
         return contexts
 
-
 def main():
     # CONFIGURATION
     INDEX_DIR = r"RAG_INDEX"
-    patent_csv = r'random100000_us_patents.csv'
+    patent_csv = r'data/random100000_us_patents.csv'
 
     patent_df = pd.read_csv(patent_csv)
     patent_df_test = patent_df.head(10000)

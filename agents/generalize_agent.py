@@ -6,7 +6,6 @@ from utils.logging_utils import setup_logging, get_logger
 setup_logging()
 
 from agents.base import BaseAgent
-from text_generation.base_runner import get_text_captioning_runner
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.llms import Ollama
@@ -16,7 +15,7 @@ from config.prompts import (
     GENERALIZE_AGENT_USER_PROMPT,
     DEFAULT_MODELS
 )
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
 logger = get_logger(__name__)
 

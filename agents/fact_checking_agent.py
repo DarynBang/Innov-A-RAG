@@ -7,7 +7,7 @@ from other agents, flagging potential issues and providing confidence scores.
 
 import json
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -236,6 +236,7 @@ class FactCheckingAgent:
         else:
             return "low"
     
+    # This is defined but not used yet
     def is_response_reliable(self, validation_result: Dict[str, Any]) -> bool:
         """
         Determine if a response is reliable based on validation results.
@@ -267,6 +268,7 @@ class FactCheckingAgent:
             logger.error(f"Error assessing response reliability: {e}")
             return False  # Conservative approach
     
+    # This is defined but not used yet
     def get_validation_summary(self, validation_result: Dict[str, Any]) -> str:
         """
         Generate a human-readable summary of validation results.
@@ -301,6 +303,7 @@ class FactCheckingAgent:
             logger.error(f"Error generating validation summary: {e}")
             return f"Validation summary unavailable due to error: {e}"
     
+    # This is defined but not used yet
     def validate_multiple_responses(
         self, 
         query: str, 
@@ -337,3 +340,5 @@ class FactCheckingAgent:
                 }
         
         return validation_results 
+    
+
