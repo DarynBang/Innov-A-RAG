@@ -49,17 +49,17 @@ class PlanningAgent:
             if self.llm_type == "openai":
                 return ChatOpenAI(
                     model=DEFAULT_MODELS["openai"],
-                    temperature=0.1
+                    temperature=0
                 )
             elif self.llm_type == "gemini":
                 return ChatGoogleGenerativeAI(
                     model=DEFAULT_MODELS["gemini"],
-                    temperature=0.1
+                    temperature=0
                 )
             elif self.llm_type == "qwen":
                 return Ollama(
                     model=DEFAULT_MODELS["qwen"],
-                    temperature=0.1
+                    temperature=0
                 )
             else:
                 raise ValueError(f"Unsupported LLM type: {self.llm_type}")
@@ -121,7 +121,7 @@ class PlanningAgent:
                 for i, subq in enumerate(planning_result.get('subquestions', []), 1):
                     logger.info(f"  {i}. {subq}")
             else:
-                self.logger.info("Query will be processed as a single question")
+                logger.info("Query will be processed as a single question")
             
             return planning_result
             

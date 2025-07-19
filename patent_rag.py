@@ -8,6 +8,9 @@ import torch
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from config.rag_config import patent_config
 import pandas as pd
+from utils.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 class PatentRAG:
     def __init__(
@@ -70,7 +73,7 @@ class PatentRAG:
         if not force_reindex and os.path.exists(self.chunks_path) and os.path.exists(self.mapping_path):
             with open(self.chunks_path,  "r", encoding="utf-8") as f: self.all_chunks    = json.load(f)
             with open(self.mapping_path, "r", encoding="utf-8") as f: self.all_metadatas = json.load(f)
-            print(f"Loaded {len(self.all_chunks)} chunks & {len(self.all_metadatas)} metadata entries.")
+            logger.info(f"Loaded {len(self.all_chunks)} chunks & {len(self.all_metadatas)} metadata entries.")
             return
 
         self.all_chunks = []
@@ -95,7 +98,7 @@ class PatentRAG:
         # write JSON
         with open(self.chunks_path,  "w", encoding="utf-8") as f: json.dump(self.all_chunks,    f, indent=2, ensure_ascii=False)
         with open(self.mapping_path, "w", encoding="utf-8") as f: json.dump(self.all_metadatas, f, indent=2, ensure_ascii=False)
-        print(f"Built & stored {len(self.all_chunks)} chunks & {len(self.all_metadatas)} metadata entries for Patent data.")
+        logger.info(f"Built & stored {len(self.all_chunks)} chunks & {len(self.all_metadatas)} metadata entries for Patent data.")
 
     def ingest_all(self, force_reindex: bool = False):
         """(Re)create Chroma collection and ingest all chunks + metadata."""
@@ -103,15 +106,15 @@ class PatentRAG:
         if force_reindex:
             try:
                 self.client.delete_collection(name=self.collection_name)
-                print(f"Deleted existing collection '{self.collection_name}'.")
+                logger.info(f"Deleted existing collection '{self.collection_name}'.")
             except Exception:
-                print(f"Failed to delete existing collection '{self.collection_name}'")  # didn’t exist
+                logger.warning(f"Failed to delete existing collection '{self.collection_name}'")  # didn’t exist
 
         # If not forcing, see if it already exists
         if not force_reindex:
             try:
                 existing = self.client.get_collection(name=self.collection_name)
-                print(f"→ Collection '{self.collection_name}' already exists; skipping ingest.")
+                logger.info(f"→ Collection '{self.collection_name}' already exists; skipping ingest.")
                 return existing
             except Exception:
                 # doesn’t exist yet → fall through to create
@@ -136,9 +139,9 @@ class PatentRAG:
                 ids=[f"chunk_{i}" for i in range(start, end)],
                 metadatas=self.all_metadatas[start:end]
             )
-            print(f" • ingested batches {start}-{end}/{total}")
+            logger.info(f" • ingested batches {start}-{end}/{total}")
 
-        print(f"Created collection '{self.collection_name}' with {total} chunks for Patent data.")
+        logger.info(f"Created collection '{self.collection_name}' with {total} chunks for Patent data.")
         return collection
 
     def add_one(
@@ -191,7 +194,7 @@ class PatentRAG:
 
         # add to Chroma
         collection.add(documents=chunks, ids=new_ids, metadatas=metas)
-        print(f"Added {len(chunks)} chunks for Patent {patent_id} of Company {company_id}.")
+        logger.info(f"Added {len(chunks)} chunks for Patent {patent_id} of Company {company_id}.")
         return collection
 
     def retrieve_patent_contexts(
@@ -266,7 +269,7 @@ def main():
         full_text="Here is the full, cleaned patent text ..."
     )
     if isinstance(res, dict) and "error" in res:
-        print(res["error"])
+        logger.error(res["error"])
 
     results = patent_rag.retrieve_patent_contexts("Machine Learning and Computer Vision", top_k=3)
     for hit in results:

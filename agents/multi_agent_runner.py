@@ -187,11 +187,12 @@ class MultiAgentRunner:
             # Extract sources for fact checking
             sources = self._extract_sources_from_contexts(all_contexts)
             
-            # Validate the final response
+            # Validate the final response with enhanced source checking
             validation_result = self.agents['fact_checker'].validate_response(
                 query=query,
                 response=final_market_analysis,
-                sources=sources
+                sources=sources,
+                contexts=all_contexts  # Pass actual contexts for enhanced verification
             )
             
             logger.info(f"Fact checking complete. Overall score: {validation_result.get('overall_score', 0)}/10")
@@ -290,30 +291,30 @@ class MultiAgentRunner:
 
     def _print_workflow_summary(self, results: Dict[str, Any]):
         """Print a comprehensive summary of workflow results to the screen."""
-        print("\n" + "="*80)
-        print("ENHANCED MULTI-AGENT WORKFLOW SUMMARY")
-        print("="*80)
+        logger.info("\n" + "="*80)
+        logger.info("ENHANCED MULTI-AGENT WORKFLOW SUMMARY")
+        logger.info("="*80)
         
-        print(f"\nQuery: {results['query']}")
+        logger.info(f"\nQuery: {results['query']}")
         
         # Planning summary
         planning = results.get('planning', {})
-        print(f"\nPlanning: {planning.get('analysis', 'No analysis')}")
-        print(f"Subquestions: {len(results.get('subquestions', []))}")
+        logger.info(f"\nPlanning: {planning.get('analysis', 'No analysis')}")
+        logger.info(f"Subquestions: {len(results.get('subquestions', []))}")
         
         # Context summary
-        print(f"\nRetrieved Contexts: {results.get('total_contexts', 0)}")
+        logger.info(f"\nRetrieved Contexts: {results.get('total_contexts', 0)}")
         
         # Synthesis preview
         synthesis = results.get('synthesis_result', '')
-        print(f"\nSynthesis:")
-        print(synthesis)
+        logger.info(f"\nSynthesis:")
+        logger.info(synthesis)
         
         # Market analysis summary
         market_analysis = results.get('market_analysis', {})
         final_analysis = market_analysis.get('final_analysis', '')
-        print(f"\nFinal Market Analysis:")
-        print(final_analysis)
+        logger.info(f"\nFinal Market Analysis:")
+        logger.info(final_analysis)
         
         # Fact checking summary
         fact_checking = results.get('fact_checking', {})
@@ -321,16 +322,16 @@ class MultiAgentRunner:
         confidence_level = fact_checking.get('confidence_level', 'unknown')
         flagged_issues = fact_checking.get('flagged_issues', [])
         
-        print(f"\nFact Checking Results:")
-        print(f"  Overall Score: {overall_score}/10 ({confidence_level.upper()} confidence)")
-        print(f"  Issues Flagged: {len(flagged_issues)}")
+        logger.info(f"\nFact Checking Results:")
+        logger.info(f"  Overall Score: {overall_score}/10 ({confidence_level.upper()} confidence)")
+        logger.info(f"  Issues Flagged: {len(flagged_issues)}")
         
         if flagged_issues:
-            print("  Issues:")
+            logger.info("  Issues:")
             for issue in flagged_issues[:3]:  # Show first 3 issues
-                print(f"    - {issue}")
+                logger.info(f"    - {issue}")
         
-        print("\n" + "="*80 + "\n")
+        logger.info("\n" + "="*80 + "\n")
 
     # Backward compatibility alias
     run = run_legacy_workflow

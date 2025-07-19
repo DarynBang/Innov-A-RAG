@@ -16,6 +16,7 @@ from config.prompts import (
     NORMALIZE_AGENT_USER_PROMPT,
     DEFAULT_MODELS
 )
+from utils.tool_registry import get_tool_registry, AdvancedNormalizeQueryAgent
 import json
 import re
 from typing import Dict, List, Any
@@ -39,17 +40,17 @@ class NormalizeQueryAgent(BaseAgent):
             if self.llm_type == "openai":
                 return ChatOpenAI(
                     model=DEFAULT_MODELS["openai"],
-                    temperature=0.1
+                    temperature=0
                 )
             elif self.llm_type == "gemini":
                 return ChatGoogleGenerativeAI(
                     model=DEFAULT_MODELS["gemini"],
-                    temperature=0.1
+                    temperature=0
                 )
             elif self.llm_type == "qwen":
                 return Ollama(
                     model=DEFAULT_MODELS["qwen"],
-                    temperature=0.1
+                    temperature=0
                 )
             else:
                 raise ValueError(f"Unsupported LLM type: {self.llm_type}")
@@ -62,6 +63,15 @@ class NormalizeQueryAgent(BaseAgent):
         """Register available tools for the agent."""
         super().register_tools(tools)
         self.available_tools = list(tools.keys()) if tools else []
+        
+        # Register tools with the global registry for enhanced functionality
+        from utils.tool_registry import register_innovarag_tools
+        register_innovarag_tools(tools)
+        
+        # Create advanced agent wrapper
+        tool_registry = get_tool_registry()
+        self.advanced_agent = AdvancedNormalizeQueryAgent(self, tool_registry)
+        
         logger.info(f"Registered {len(self.available_tools)} tools: {self.available_tools}")
     
     def _clean_json_response(self, response_text: str) -> str:
@@ -90,12 +100,16 @@ class NormalizeQueryAgent(BaseAgent):
         logger.info(f"Normalizing query: {query}")
         
         try:
+            # Generate dynamic system prompt with tool descriptions
+            tool_registry = get_tool_registry()
+            dynamic_system_prompt = self._generate_dynamic_system_prompt(tool_registry)
+            
             # Create the prompt
             user_prompt = NORMALIZE_AGENT_USER_PROMPT.format(query=query)
             
             # Prepare messages
             messages = [
-                SystemMessage(content=NORMALIZE_AGENT_SYSTEM_PROMPT),
+                SystemMessage(content=dynamic_system_prompt),
                 HumanMessage(content=user_prompt)
             ]
             
@@ -362,6 +376,56 @@ class NormalizeQueryAgent(BaseAgent):
             "patent_ids": [],
             "keywords": query.split(),
             "normalized_query": query
-        } 
+        }
+    
+    def _generate_dynamic_system_prompt(self, tool_registry) -> str:
+        """Generate system prompt with dynamic tool descriptions."""
+        try:
+            # Get tool descriptions and examples from registry
+            tool_descriptions = tool_registry.get_tool_descriptions()
+            examples = tool_registry.generate_examples()
+            
+            # Format examples for prompt
+            example_text = ""
+            for example in examples:
+                example_text += f"""
+Query: "{example['query']}"
+Output: {{
+    "query_type": "{example['type']}",
+    "identifiers": {json.dumps(example['identifiers'])},
+    "recommended_tools": {json.dumps(example['tools'])},
+    "reasoning": "{example['reasoning']}"
+}}
+"""
+            
+            # Replace placeholders in system prompt
+            system_prompt = NORMALIZE_AGENT_SYSTEM_PROMPT.format(
+                TOOL_DESCRIPTIONS=tool_descriptions,
+                CLASSIFICATION_EXAMPLES=example_text
+            )
+            
+            return system_prompt
+            
+        except Exception as e:
+            logger.error(f"Error generating dynamic system prompt: {e}")
+            # Fallback to basic prompt
+            return NORMALIZE_AGENT_SYSTEM_PROMPT.replace("{TOOL_DESCRIPTIONS}", "Tools not available").replace("{CLASSIFICATION_EXAMPLES}", "Examples not available")
+    
+    def normalize_and_retrieve_enhanced(self, query: str) -> Dict[str, Any]:
+        """
+        Enhanced normalize and retrieve with sequential tool execution.
+        
+        Args:
+            query: User query
+            
+        Returns:
+            Enhanced results with sequential tool execution
+        """
+        if hasattr(self, 'advanced_agent'):
+            return self.advanced_agent.normalize_and_retrieve_advanced(query)
+        else:
+            # Fallback to basic implementation
+            logger.warning("Advanced agent not available, using basic implementation")
+            return self.normalize_and_retrieve(query) 
         
         

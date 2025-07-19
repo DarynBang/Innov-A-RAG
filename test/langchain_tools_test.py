@@ -188,7 +188,7 @@ from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.memory import ConversationBufferMemory
 
 # Load model (can be GPT-4o-mini or gpt-3.5-turbo)
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 # All 4 tools
 tools = [company_rag, patent_rag, company_exact, patent_exact]

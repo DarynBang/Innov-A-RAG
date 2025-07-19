@@ -5,7 +5,7 @@ from utils.logging_utils import setup_logging, get_logger
 setup_logging()
 
 from openai import OpenAI
-from config.prompt import GENERALIZE_PROMPT_TEMPLATE
+from config.prompts import GENERALIZE_PROMPT_TEMPLATE
 import os
 from dotenv import load_dotenv
 
@@ -52,7 +52,7 @@ def generate_caption_with_openai(input_data: dict) -> str:
                 {"role": "user", "content": prompt}
             ],
             max_tokens=1024,
-            temperature=0.0
+            temperature=0
         )
         
         result = response.choices[0].message.content.strip()

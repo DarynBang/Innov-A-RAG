@@ -113,7 +113,7 @@ def init_company_tools(firm_df: pd.DataFrame, index_dir: str):
     logger.info("Global company tools instance initialized")
     return {
         "exact_company_lookup": exact_company_lookup_tool,
-        "company_rag_retrieval": company_rag_retrieval_tool,
+        "company_rag_retrieval": company_rag_retrieval_tool_wrapper,
     }
 
 # Tool functions for LangChain integration
@@ -144,5 +144,9 @@ def company_rag_retrieval_tool(query: str, top_k: int = 5) -> str:
     for i, context in enumerate(contexts, 1):
         result += f"\n{i}. {context['company_name']}\n{context['chunk']}\n"
     
-    return result 
+    return result
+
+def company_rag_retrieval_tool_wrapper(query: str) -> str:
+    """Wrapper for company RAG retrieval tool that handles single parameter calls."""
+    return company_rag_retrieval_tool(query, top_k=5) 
 

@@ -100,10 +100,10 @@ class InnovARAG_Pipeline:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             gc.collect()
-            print("Freed space from patent and firm Retriever")
+            logger.info("Freed space from patent and firm Retriever")
 
         except Exception as e:
-            print(f"Error freeing space for Retriever due to {e}")
+            logger.error(f"Error freeing space for Retriever due to {e}")
 
         # Pass context + question into the multi-agent system
         self.multi_agent.run({"question": question,

@@ -5,7 +5,7 @@ from utils.logging_utils import setup_logging, get_logger
 setup_logging()
 
 import torch
-from config.prompt import GENERALIZE_PROMPT_TEMPLATE
+from config.prompts import GENERALIZE_PROMPT_TEMPLATE
 from utils.model_utils import get_qwen_vl_model_and_processor
 
 logger = get_logger(__name__)
@@ -61,7 +61,7 @@ def generate_caption_with_qwen(input_data: dict) -> str:
 
         # Generate response
         with torch.no_grad():
-            generated_ids = model.generate(**inputs, max_new_tokens=512, temperature=0.0)
+            generated_ids = model.generate(**inputs, max_new_tokens=512, temperature=0)
             generated_ids_trimmed = [out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)]
             output_text = processor.batch_decode(generated_ids_trimmed, skip_special_tokens=True)
 

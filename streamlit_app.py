@@ -31,7 +31,12 @@ try:
     from patent_rag import PatentRAG
     from tools.company_tools import init_company_tools
     from tools.patent_tools import init_patent_tools
-    from tools.hybrid_rag_tools import hybrid_rag_retrieval_tool
+    from tools.hybrid_rag_tools import hybrid_rag_retrieval_tool_wrapper
+    from tools.enhanced_hybrid_rag_tools import (
+        enhanced_hybrid_rag_retrieval_tool,
+        company_data_with_mapping_tool,
+        mapping_key_search_tool
+    )
     from utils.logging_utils import setup_logging, get_logger
     
     # Setup logging
@@ -112,11 +117,16 @@ def initialize_innovarag():
         runner = MultiAgentRunner()
         
         # Register tools
-        company_tools = init_company_tools(firm_rag, index_dir)
-        patent_tools = init_patent_tools(patent_rag, index_dir)
+        company_tools = init_company_tools(firm_df, index_dir)
+        patent_tools = init_patent_tools(patent_df, index_dir)
         
         all_tools = {**company_tools, **patent_tools}
-        all_tools['hybrid_rag_retrieval'] = hybrid_rag_retrieval_tool
+        all_tools['hybrid_rag_retrieval'] = hybrid_rag_retrieval_tool_wrapper
+        
+        # Add enhanced hybrid tools with data mapping
+        all_tools['enhanced_hybrid_rag_retrieval'] = enhanced_hybrid_rag_retrieval_tool
+        all_tools['company_data_with_mapping'] = company_data_with_mapping_tool
+        all_tools['mapping_key_search'] = mapping_key_search_tool
         
         runner.register_tools(all_tools)
         
@@ -228,6 +238,111 @@ def display_workflow_progress(results):
                 for issue in flagged_issues[:3]:
                     st.write(f"- {issue}")
 
+def display_enhanced_features():
+    """Display enhanced data mapping and hybrid retrieval features."""
+    st.header("🔧 Enhanced Features")
+    
+    with st.expander("🗺️ Data Mapping Explorer", expanded=False):
+        st.write("**Explore enhanced data mappings and chunk relationships**")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Company Data Mapping")
+            company_name = st.text_input("Company Name", placeholder="e.g., TechNova")
+            hojin_id = st.text_input("Hojin ID", placeholder="e.g., 12345")
+            
+            if st.button("🔍 Get Company Mapping"):
+                if company_name:
+                    try:
+                        with st.spinner("Fetching enhanced company data..."):
+                            mapping_data = company_data_with_mapping_tool(company_name)
+                        
+                        if mapping_data.get("success"):
+                            st.json(mapping_data)
+                        else:
+                            st.error(f"Error: {mapping_data.get('error', 'Unknown error')}")
+                    except Exception as e:
+                        st.error(f"Error fetching company mapping: {e}")
+        
+        with col2:
+            st.subheader("Chunk Key Search")
+            chunk_company = st.text_input("Company Name (for chunk)", placeholder="e.g., TechNova")
+            chunk_hojin = st.text_input("Hojin ID (for chunk)", placeholder="e.g., 12345")
+            chunk_patent = st.text_input("Patent ID (optional)", placeholder="e.g., US123456")
+            chunk_index = st.number_input("Chunk Index (optional)", value=None, min_value=0)
+            
+            if st.button("🎯 Search by Mapping Key"):
+                try:
+                    with st.spinner("Searching by mapping keys..."):
+                        key_results = mapping_key_search_tool(
+                            company_name=chunk_company if chunk_company else None,
+                            hojin_id=chunk_hojin if chunk_hojin else None,
+                            patent_id=chunk_patent if chunk_patent else None,
+                            chunk_index=chunk_index
+                        )
+                    
+                    if key_results.get("success"):
+                        st.json(key_results)
+                    else:
+                        st.error(f"Error: {key_results.get('error', 'Unknown error')}")
+                except Exception as e:
+                    st.error(f"Error in mapping key search: {e}")
+    
+    with st.expander("🔄 Enhanced Hybrid Retrieval", expanded=False):
+        st.write("**Test enhanced hybrid retrieval with data mapping integration**")
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            hybrid_query = st.text_input("Hybrid Search Query", placeholder="e.g., AI innovation trends")
+        
+        with col2:
+            search_type = st.selectbox("Search Type", ["both", "company", "patent"])
+            top_k = st.number_input("Top K Results", value=3, min_value=1, max_value=10)
+        
+        if st.button("🚀 Enhanced Hybrid Search"):
+            if hybrid_query:
+                try:
+                    with st.spinner("Performing enhanced hybrid search..."):
+                        hybrid_results = enhanced_hybrid_rag_retrieval_tool(
+                            query=hybrid_query,
+                            top_k=top_k,
+                            search_type=search_type
+                        )
+                    
+                    if hybrid_results.get("success"):
+                        st.subheader("Enhanced Hybrid Search Results")
+                        
+                        # Display basic results
+                        if hybrid_results.get("company_contexts"):
+                            st.write(f"**Company Contexts ({len(hybrid_results['company_contexts'])}):**")
+                            for i, ctx in enumerate(hybrid_results["company_contexts"]):
+                                with st.expander(f"Company Context {i+1}: {ctx.get('company_name', 'Unknown')}"):
+                                    st.json(ctx)
+                        
+                        if hybrid_results.get("patent_contexts"):
+                            st.write(f"**Patent Contexts ({len(hybrid_results['patent_contexts'])}):**")
+                            for i, ctx in enumerate(hybrid_results["patent_contexts"]):
+                                with st.expander(f"Patent Context {i+1}: {ctx.get('patent_id', 'Unknown')}"):
+                                    st.json(ctx)
+                        
+                        # Display enhanced mappings
+                        if hybrid_results.get("enhanced_mappings"):
+                            st.subheader("Enhanced Mappings")
+                            st.json(hybrid_results["enhanced_mappings"])
+                        
+                        # Display mapping statistics
+                        if hybrid_results.get("mapping_stats"):
+                            st.subheader("Data Mapping Statistics")
+                            st.json(hybrid_results["mapping_stats"])
+                    
+                    else:
+                        st.error(f"Error: {hybrid_results.get('message', 'Unknown error')}")
+                        
+                except Exception as e:
+                    st.error(f"Error in enhanced hybrid search: {e}")
+
 def main():
     """Main Streamlit application."""
     display_header()
@@ -320,103 +435,111 @@ def main():
         """)
         return
     
-    # Query input
-    st.header("💬 Ask Your Question")
+    # Main tabs
+    tab1, tab2 = st.tabs(["🚀 Main Analysis", "🔧 Enhanced Features"])
     
-    # Pre-fill based on query mode
-    mode_examples = {
-        "Company Analysis": "Tell me about TechNova's business focus and market opportunities",
-        "Patent Analysis": "What is the technology behind Patent 273556553?",
-        "General Innovation": "What are the latest trends in AI technology patents?",
-        "Freestyle Query": "Compare TechNova and InnovateCorp's innovation strategies"
-    }
-    
-    default_query = mode_examples.get(query_mode, "")
-    
-    query = st.text_area(
-        "Enter your question:",
-        value=default_query,
-        height=100,
-        help="Ask about companies, patents, market trends, or any innovation-related topic"
-    )
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        analyze_button = st.button("🚀 Analyze", type="primary", use_container_width=True)
-    with col2:
-        clear_button = st.button("🗑️ Clear", use_container_width=True)
-    
-    if clear_button:
-        st.session_state.current_results = None
-        st.experimental_rerun()
-    
-    # Process query
-    if analyze_button and query.strip():
-        with st.spinner("🤖 AI agents are analyzing your query..."):
-            try:
-                # Record query
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                st.session_state.query_history.append({
-                    "timestamp": timestamp,
-                    "query": query,
-                    "mode": query_mode
-                })
-                
-                # Process query
-                start_time = time.time()
-                results = st.session_state.runner.run_enhanced_workflow(query)
-                processing_time = time.time() - start_time
-                
-                # Store results
-                st.session_state.current_results = results
-                
-                if "error" in results:
-                    st.error(f"❌ Analysis failed: {results['error']}")
-                else:
-                    # Display summary metrics
-                    col1, col2, col3, col4 = st.columns(4)
-                    metadata = results.get('metadata', {})
-                    
-                    with col1:
-                        st.metric("Processing Time", f"{processing_time:.2f}s")
-                    with col2:
-                        st.metric("Subquestions", metadata.get('subquestions_count', 0))
-                    with col3:
-                        st.metric("Contexts Retrieved", metadata.get('contexts_count', 0))
-                    with col4:
-                        confidence = metadata.get('confidence_level', 'unknown')
-                        st.metric("Confidence", confidence.upper())
-                    
-                    st.success("✅ Analysis completed successfully!")
-                    
-            except Exception as e:
-                st.error(f"❌ Error during analysis: {e}")
-                st.code(traceback.format_exc())
-    
-    # Display results
-    if st.session_state.current_results and "error" not in st.session_state.current_results:
-        st.divider()
-        display_workflow_progress(st.session_state.current_results)
+    with tab1:
+        # Query input
+        st.header("💬 Ask Your Question")
         
-        # Download results
-        st.subheader("💾 Export Results")
-        col1, col2 = st.columns(2)
+        # Pre-fill based on query mode
+        mode_examples = {
+            "Company Analysis": "Tell me about TechNova's business focus and market opportunities",
+            "Patent Analysis": "What is the technology behind Patent 273556553?",
+            "General Innovation": "What are the latest trends in AI technology patents?",
+            "Freestyle Query": "Compare TechNova and InnovateCorp's innovation strategies"
+        }
         
+        default_query = mode_examples.get(query_mode, "")
+        
+        query = st.text_area(
+            "Enter your question:",
+            value=default_query,
+            height=100,
+            help="Ask about companies, patents, market trends, or any innovation-related topic"
+        )
+        
+        col1, col2 = st.columns([3, 1])
         with col1:
-            if st.button("📥 Download JSON"):
-                results_json = json.dumps(st.session_state.current_results, indent=2)
-                st.download_button(
-                    label="Download Complete Results",
-                    data=results_json,
-                    file_name=f"innovarag_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                    mime="application/json"
-                )
-        
+            analyze_button = st.button("🚀 Analyze", type="primary", use_container_width=True)
         with col2:
-            if st.button("📄 Download Summary"):
-                # Create summary text
-                results = st.session_state.current_results
-                summary = f"""
+            clear_button = st.button("🗑️ Clear", use_container_width=True)
+        
+        if clear_button:
+            st.session_state.current_results = None
+            st.experimental_rerun()
+        
+        # Process query
+        if analyze_button and query.strip():
+            with st.spinner("🤖 AI agents are analyzing your query..."):
+                try:
+                    # Record query
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    st.session_state.query_history.append({
+                        "timestamp": timestamp,
+                        "query": query,
+                        "mode": query_mode
+                    })
+                    
+                    # Process query
+                    start_time = time.time()
+                    results = st.session_state.runner.run_enhanced_workflow(query)
+                    processing_time = time.time() - start_time
+                    
+                    # Store results
+                    st.session_state.current_results = results
+                    
+                    if "error" in results:
+                        st.error(f"❌ Analysis failed: {results['error']}")
+                    else:
+                        # Display summary metrics
+                        col1, col2, col3, col4 = st.columns(4)
+                        metadata = results.get('metadata', {})
+                        
+                        with col1:
+                            st.metric("Processing Time", f"{processing_time:.2f}s")
+                        with col2:
+                            st.metric("Subquestions", metadata.get('subquestions_count', 0))
+                        with col3:
+                            st.metric("Contexts Retrieved", metadata.get('contexts_count', 0))
+                        with col4:
+                            confidence = metadata.get('confidence_level', 'unknown')
+                            st.metric("Confidence", confidence.upper())
+                        
+                        st.success("✅ Analysis completed successfully!")
+                
+                except Exception as e:
+                    st.error(f"❌ Error during analysis: {str(e)}")
+                    logger.error(f"Streamlit analysis error: {e}")
+        
+        # Display results
+        if st.session_state.current_results and "error" not in st.session_state.current_results:
+            results = st.session_state.current_results
+            
+            # Main results
+            display_workflow_progress(results)
+            
+            # Download options
+            st.divider()
+            st.header("💾 Export Results")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if st.button("📊 Download JSON"):
+                    results_json = json.dumps(results, indent=2, ensure_ascii=False)
+                    st.download_button(
+                        label="Download Complete Results",
+                        data=results_json,
+                        file_name=f"innovarag_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                        mime="application/json"
+                    )
+            
+            with col2:
+                if st.button("📄 Download Summary"):
+                    # Create summary text
+                    results = st.session_state.current_results
+                    summary = f"""
 InnovARAG Analysis Summary
 =========================
 Query: {results.get('query', '')}
@@ -430,25 +553,29 @@ Final Market Analysis:
 
 Fact Check Score: {results.get('fact_checking', {}).get('overall_score', 0)}/10
 Confidence Level: {results.get('fact_checking', {}).get('confidence_level', 'unknown').upper()}
-                """
-                
-                st.download_button(
-                    label="Download Summary",
-                    data=summary,
-                    file_name=f"innovarag_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                    mime="text/plain"
-                )
-    
-    # Query history
-    if st.session_state.query_history:
-        st.divider()
-        st.subheader("📚 Query History")
+                    """
+                    
+                    st.download_button(
+                        label="Download Summary",
+                        data=summary,
+                        file_name=f"innovarag_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                        mime="text/plain"
+                    )
         
-        with st.expander("View Previous Queries", expanded=False):
-            for i, entry in enumerate(reversed(st.session_state.query_history[-10:])):
-                st.write(f"**{entry['timestamp']}** ({entry['mode']})")
-                st.write(f"_{entry['query']}_")
-                st.divider()
+        # Query history
+        if st.session_state.query_history:
+            st.divider()
+            st.subheader("📚 Query History")
+            
+            with st.expander("View Previous Queries", expanded=False):
+                for i, entry in enumerate(reversed(st.session_state.query_history[-10:])):
+                    st.write(f"**{entry['timestamp']}** ({entry['mode']})")
+                    st.write(f"_{entry['query']}_")
+                    st.divider()
+    
+    with tab2:
+        # Enhanced features tab
+        display_enhanced_features()
 
 if __name__ == "__main__":
     main() 

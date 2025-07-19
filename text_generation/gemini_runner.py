@@ -7,7 +7,7 @@ setup_logging()
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
-from config.prompt import GENERALIZE_PROMPT_TEMPLATE
+from config.prompts import GENERALIZE_PROMPT_TEMPLATE
 
 logger = get_logger(__name__)
 
@@ -53,7 +53,7 @@ def generate_caption_with_gemini(input_data: dict) -> str:
         response = model.generate_content(
             prompt,
             generation_config={
-                "temperature": 0.0,
+                "temperature": 0,
                 "max_output_tokens": 1024,
             }
         )

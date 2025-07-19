@@ -8,6 +8,9 @@ import torch
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import pandas as pd
 from config.rag_config import firm_config
+from utils.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 class FirmSummaryRAG:
     def __init__(
@@ -67,7 +70,7 @@ class FirmSummaryRAG:
         if not force_reindex and os.path.exists(self.chunks_path) and os.path.exists(self.mapping_path):
             with open(self.chunks_path,  "r", encoding="utf-8") as f: self.all_chunks    = json.load(f)
             with open(self.mapping_path, "r", encoding="utf-8") as f: self.all_metadatas = json.load(f)
-            print(f"Loaded {len(self.all_chunks)} chunks & {len(self.all_metadatas)} metadata entries.")
+            logger.info(f"Loaded {len(self.all_chunks)} chunks & {len(self.all_metadatas)} metadata entries.")
             return
 
         self.all_chunks = []
@@ -92,7 +95,7 @@ class FirmSummaryRAG:
         # write JSON
         with open(self.chunks_path,  "w", encoding="utf-8") as f: json.dump(self.all_chunks,    f, indent=2, ensure_ascii=False)
         with open(self.mapping_path, "w", encoding="utf-8") as f: json.dump(self.all_metadatas, f, indent=2, ensure_ascii=False)
-        print(f"Built & stored {len(self.all_chunks)} chunks & {len(self.all_metadatas)} metadata entries.")
+        logger.info(f"Built & stored {len(self.all_chunks)} chunks & {len(self.all_metadatas)} metadata entries.")
 
     def ingest_all(self, force_reindex: bool = False):
         """(Re)create Chroma collection and ingest all chunks + metadata."""
@@ -100,15 +103,15 @@ class FirmSummaryRAG:
         if force_reindex:
             try:
                 self.client.delete_collection(name=self.collection_name)
-                print(f"Deleted existing collection '{self.collection_name}'.")
+                logger.info(f"Deleted existing collection '{self.collection_name}'.")
             except Exception:
-                print(f"Failed deleting existing collection '{self.collection_name}'.")
+                logger.warning(f"Failed deleting existing collection '{self.collection_name}'.")
 
         # If not forcing, see if it already exists
         if not force_reindex:
             try:
                 existing = self.client.get_collection(name=self.collection_name)
-                print(f"→ Collection '{self.collection_name}' already exists; skipping ingest.")
+                logger.info(f"→ Collection '{self.collection_name}' already exists; skipping ingest.")
                 return existing
             except Exception:
                 # doesn’t exist yet → fall through to create
@@ -133,9 +136,9 @@ class FirmSummaryRAG:
                 ids=[f"chunk_{i}" for i in range(start, end)],
                 metadatas=self.all_metadatas[start:end]
             )
-            print(f" • ingested batches {start}-{end}/{total}")
+            logger.info(f" • ingested batches {start}-{end}/{total}")
 
-        print(f"Created collection '{self.collection_name}' with {total} chunks.")
+        logger.info(f"Created collection '{self.collection_name}' with {total} chunks.")
         return collection
 
     def add_one(
@@ -190,8 +193,8 @@ class FirmSummaryRAG:
 
         # add to Chroma
         collection.add(documents=chunks, ids=new_ids, metadatas=metas)
-        print(f"Added {len(chunks)} chunks for company {company_id}.")
-        print(f"Number of total chunks: {len(self.all_chunks)} chunks")
+        logger.info(f"Added {len(chunks)} chunks for company {company_id}.")
+        logger.info(f"Number of total chunks: {len(self.all_chunks)} chunks")
         return collection
 
     def retrieve_firm_contexts(
@@ -265,7 +268,7 @@ def main():
         summary_text="Acme develops advanced robots..."
     )
     if isinstance(res, dict) and "error" in res:
-        print(res["error"])
+        logger.error(res["error"])
 
     # Query
     results = firm_rag.retrieve_firm_contexts("Machine Learning and Computer Vision", top_k=3)

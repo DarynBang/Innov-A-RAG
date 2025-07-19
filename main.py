@@ -12,7 +12,12 @@ from firm_summary_rag import FirmSummaryRAG
 from patent_rag import PatentRAG
 from tools.company_tools import init_company_tools
 from tools.patent_tools import init_patent_tools
-from tools.hybrid_rag_tools import hybrid_rag_retrieval_tool
+from tools.hybrid_rag_tools import hybrid_rag_retrieval_tool_wrapper
+from tools.enhanced_hybrid_rag_tools import (
+    enhanced_hybrid_rag_retrieval_tool,
+    company_data_with_mapping_tool,
+    mapping_key_search_tool
+)
 import pandas as pd
 from dotenv import load_dotenv
 
@@ -83,11 +88,16 @@ def main():
         runner = MultiAgentRunner()
         
         # Initialize and register tools
-        company_tools = init_company_tools(firm_rag, index_dir)
-        patent_tools = init_patent_tools(patent_rag, index_dir)
+        company_tools = init_company_tools(firm_df, index_dir)
+        patent_tools = init_patent_tools(patent_df, index_dir)
         
         all_tools = {**company_tools, **patent_tools}
-        all_tools['hybrid_rag_retrieval'] = hybrid_rag_retrieval_tool
+        all_tools['hybrid_rag_retrieval'] = hybrid_rag_retrieval_tool_wrapper
+        
+        # Add enhanced hybrid tools
+        all_tools['enhanced_hybrid_rag_retrieval'] = enhanced_hybrid_rag_retrieval_tool
+        all_tools['company_data_with_mapping'] = company_data_with_mapping_tool
+        all_tools['mapping_key_search'] = mapping_key_search_tool
         
         runner.register_tools(all_tools)
         logger.info(f"Registered {len(all_tools)} tools")
@@ -128,11 +138,11 @@ def main():
                 )
                 
                 logger.info("Legacy workflow completed successfully")
-                print("\n" + "="*80)
-                print("FINAL RESULT:")
-                print("="*80)
-                print(result)
-                print("="*80)
+                logger.info("\n" + "="*80)
+                logger.info("FINAL RESULT:")
+                logger.info("="*80)
+                logger.info(result)
+                logger.info("="*80)
                 
             else:
                 # Run enhanced workflow
@@ -147,16 +157,16 @@ def main():
             
         except Exception as e:
             logger.error(f"Error during query processing: {e}")
-            print(f"Error: {e}")
+            logger.error(f"Error: {e}")
     
     elif args.mode == 'chat':
         # Interactive chat mode
         logger.info("Starting interactive chat mode...")
-        print("\n" + "="*60)
-        print("InnovARAG Interactive Chat Mode")
-        print("="*60)
-        print("Enter your queries about companies, patents, or general innovation topics.")
-        print("Type 'quit', 'exit', or press Ctrl+C to stop.\n")
+        logger.info("\n" + "="*60)
+        logger.info("InnovARAG Interactive Chat Mode")
+        logger.info("="*60)
+        logger.info("Enter your queries about companies, patents, or general innovation topics.")
+        logger.info("Type 'quit', 'exit', or press Ctrl+C to stop.\n")
         
         try:
             while True:
@@ -169,30 +179,32 @@ def main():
                     if question.lower() in ['quit', 'exit', 'q']:
                         break
                     
-                    print("\n" + "="*40)
-                    print("Processing your query...")
-                    print("="*40)
+                    logger.info("\n" + "="*40)
+                    logger.info("Processing your query...")
+                    logger.info("="*40)
                     
                     # Run enhanced workflow
                     results = runner.run_enhanced_workflow(question)
                     
                     if "error" in results:
-                        print(f"❌ Error: {results['error']}")
+                        logger.error(f"Error: {results['error']}")
                     else:
-                        print("✅ Analysis complete!")
+                        logger.info("Analysis complete!")
                         
-                    print("\n" + "-"*60)
+                    logger.info("\n" + "-"*60)
                     
                 except KeyboardInterrupt:
                     break
                 except Exception as e:
                     logger.error(f"Error in chat mode: {e}")
-                    print(f"❌ Error processing query: {e}")
+                    logger.error(f"Error processing query: {e}")
                     
         except KeyboardInterrupt:
             pass
             
-        print("\n👋 Thanks for using InnovARAG! Goodbye!")
+        logger.info("\nThanks for using InnovARAG! Goodbye!")
 
 if __name__ == "__main__":
     main() 
+    
+    

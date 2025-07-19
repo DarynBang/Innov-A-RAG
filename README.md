@@ -50,6 +50,12 @@ cp .env.example .env
 ```bash
 # Ingest company and patent data
 python main.py --mode ingest --force_reindex
+
+# This will:
+# - Process patent data and create embeddings
+# - Process company data and create embeddings  
+# - Create RAG_INDEX directory with all indexed data
+# - Build enhanced data mappings
 ```
 
 ### 3. Configure LLMs
@@ -71,8 +77,11 @@ agent_config = {
 ### 4. Run Queries
 
 ```bash
-# Single query mode
-python main.py --mode query --query "Tell me about TechNova's market opportunities"
+# Or with custom query
+python main.py --mode query --query "Tell me about TechNova's business focus and market opportunities"
+
+# Test legacy workflow (backward compatibility)
+python main.py --mode query --query "What are the latest AI patent trends?" --legacy
 
 # Interactive chat mode
 python main.py --mode chat
@@ -80,8 +89,10 @@ python main.py --mode chat
 # Test mode with default query
 python main.py --mode test
 
-# Web interface
+# Start interactive chat
+# This will open your browser to: http://localhost:8501
 streamlit run streamlit_app.py
+
 ```
 
 ## 💻 Usage Examples

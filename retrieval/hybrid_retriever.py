@@ -5,9 +5,9 @@ Implements proper score fusion and deduplication.
 from utils.logging_utils import setup_logging, get_logger
 setup_logging()
 
-from langchain.retrievers import BM25Retriever
-from langchain.vectorstores import Chroma
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_community.retrievers import BM25Retriever
+from langchain_community.vectorstores import Chroma
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.schema import Document
 from typing import List, Dict, Any
 import numpy as np

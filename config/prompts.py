@@ -90,58 +90,20 @@ Classification Guidelines:
 - 'patent': Queries asking about specific patents, patent portfolios, or patent-related information
 - 'general': Broad industry trends, comparisons, or queries that don't focus on specific entities
 
-Tool Selection:
-- exact_company_lookup: When you have a specific company name and need basic company information
-- company_rag_retrieval: When you need detailed analysis or context about companies
-- exact_patent_lookup: When you have a specific patent ID/number
-- patent_rag_retrieval: When you need patent analysis or searching by technology/keywords
-- hybrid_rag_retrieval: When the query involves both companies and patents or general industry information
+{TOOL_DESCRIPTIONS}
 
 Output format: JSON with the following structure:
-{
+{{
     "query_type": "company|patent|general",
-    "identifiers": {
+    "identifiers": {{
         "companies": ["company1", "company2", ...],
         "patents": ["patent1", "patent2", ...]
-    },
+    }},
     "recommended_tools": ["tool1", "tool2", ...],
     "reasoning": "Explanation of classification and tool selection"
-}
+}}
 
-Examples:
-
-Query: "What are TechNova's market opportunities?"
-Output: {
-    "query_type": "company",
-    "identifiers": {
-        "companies": ["TechNova"],
-        "patents": []
-    },
-    "recommended_tools": ["company_rag_retrieval"],
-    "reasoning": "Specific company query requiring detailed market analysis"
-}
-
-Query: "What is the technology behind Patent 273556553?"
-Output: {
-    "query_type": "patent", 
-    "identifiers": {
-        "companies": [],
-        "patents": ["273556553"]
-    },
-    "recommended_tools": ["exact_patent_lookup", "patent_rag_retrieval"],
-    "reasoning": "Specific patent query requiring both basic info and technical analysis"
-}
-
-Query: "What are the latest trends in AI patents?"
-Output: {
-    "query_type": "general",
-    "identifiers": {
-        "companies": [],
-        "patents": []
-    },
-    "recommended_tools": ["patent_rag_retrieval", "hybrid_rag_retrieval"],
-    "reasoning": "General industry trend query requiring broad patent analysis"
-}"""
+{CLASSIFICATION_EXAMPLES}"""
 
 NORMALIZE_AGENT_USER_PROMPT = """Analyze and classify the following query:
 
@@ -293,35 +255,54 @@ Your role is to:
 1. Integrate opportunity and risk analyses
 2. Provide balanced strategic recommendations
 3. Prioritize opportunities considering associated risks
-4. Deliver executive-level insights and decisions
+4. Suggest specific technologies and products based on market analysis
+5. Deliver executive-level insights and decisions
 
 Guidelines:
 - Balance optimism about opportunities with realism about risks
 - Provide clear strategic priorities and action items
 - Include timeline and resource considerations
 - Offer alternative scenarios and contingency plans
+- Suggest specific technologies, products, or solutions based on identified opportunities
+- Recommend technology development priorities and product roadmaps
+- Consider market readiness and competitive landscape for technology suggestions
 - Maintain source attribution for all claims
 
 Output should include:
 1. Executive summary of key findings
 2. Strategic recommendations prioritized by impact/feasibility
-3. Risk-adjusted opportunity assessment
-4. Implementation roadmap suggestions
-5. Success metrics and monitoring recommendations"""
+3. Technology and product suggestions with market rationale
+4. Risk-adjusted opportunity assessment
+5. Implementation roadmap suggestions
+6. Success metrics and monitoring recommendations"""
 
 MARKET_MANAGER_AGENT_USER_PROMPT = """Synthesize the following market analysis into strategic recommendations:
 
 Original Query: {query}
+Synthesis Result: {synthesis_result}
 Opportunity Analysis: {opportunity_analysis}
 Risk Analysis: {risk_analysis}
+Available Context: {contexts}
 
 Provide a comprehensive strategic assessment that includes:
 1. Executive summary of key findings
 2. Top 3-5 strategic recommendations
-3. Risk-opportunity matrix analysis
-4. Implementation priorities and timeline
-5. Success metrics and KPIs
-6. Source attribution for all major claims
+3. Technology and product suggestions based on market opportunities:
+   - Specific technologies to develop or acquire
+   - Product ideas aligned with market needs
+   - Innovation priorities and R&D focus areas
+   - Technology partnerships or licensing opportunities
+4. Risk-opportunity matrix analysis
+5. Implementation priorities and timeline
+6. Success metrics and KPIs
+7. Source attribution for all major claims
+
+Technology/Product Suggestion Guidelines:
+- Base suggestions on concrete market opportunities identified
+- Consider competitive landscape and differentiation potential
+- Assess technical feasibility and resource requirements
+- Recommend both short-term wins and long-term strategic investments
+- Include market size estimates and revenue potential where possible
 
 Your response should be executive-ready and actionable for strategic decision-making."""
 

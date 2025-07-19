@@ -31,9 +31,9 @@ class PatentTools:
         logger.info(f"Looking up exact patent info for: {patent_id}")
         
         try:
-            # Search by patent_id
+            # Search by appln_id (the actual column name in the dataset)
             matches = self.patent_df[
-                self.patent_df['patent_id'].astype(str).str.contains(patent_id, case=False, na=False)
+                self.patent_df['appln_id'].astype(str).str.contains(patent_id, case=False, na=False)
             ]
             
             if matches.empty:
@@ -46,16 +46,16 @@ class PatentTools:
             
             # Return first match (most relevant)
             patent_data = matches.iloc[0].to_dict()
-            logger.info(f"Found exact patent match: {patent_data.get('patent_id', 'N/A')}")
+            logger.info(f"Found exact patent match: {patent_data.get('appln_id', 'N/A')}")
             
             return {
                 "success": True,
                 "message": "Patent information retrieved successfully",
                 "data": {
-                    "patent_id": patent_data.get("patent_id", ""),
+                    "patent_id": patent_data.get("appln_id", ""),  # Use appln_id as patent_id
                     "company_name": patent_data.get("company_name", ""),
-                    "company_id": patent_data.get("company_id", ""),
-                    "full_text": patent_data.get("full_text", ""),
+                    "company_id": patent_data.get("hojin_id", ""),  # Use hojin_id as company_id
+                    "full_text": patent_data.get("cleaned_patent", ""),  # Use cleaned_patent as full_text
                     "abstract": patent_data.get("abstract", "")
                 }
             }
@@ -106,7 +106,7 @@ def init_patent_tools(patent_df: pd.DataFrame, index_dir: str):
     logger.info("Global patent tools instance initialized")
     return {
         "exact_patent_lookup": exact_patent_lookup_tool,
-        "patent_rag_retrieval": patent_rag_retrieval_tool,
+        "patent_rag_retrieval": patent_rag_retrieval_tool_wrapper,
     }
 
 # Tool functions for LangChain integration
@@ -137,5 +137,9 @@ def patent_rag_retrieval_tool(query: str, top_k: int = 5) -> str:
     for i, context in enumerate(contexts, 1):
         result += f"\n{i}. Patent {context['patent_id']} ({context['company_name']})\n{context['chunk']}\n"
     
-    return result 
+    return result
+
+def patent_rag_retrieval_tool_wrapper(query: str) -> str:
+    """Wrapper for patent RAG retrieval tool that handles single parameter calls."""
+    return patent_rag_retrieval_tool(query, top_k=5) 
 

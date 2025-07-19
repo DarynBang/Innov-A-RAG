@@ -1,5 +1,7 @@
 # 19/07/2025 
 
+## 15:00 
+
 - Currently, the **retrieval folders** contains just the code that maybe would later used for Hybrid Search. **BUT currently maybe it is not used yet**. 
 
 - We set all the **LLMs with temperature 0.1** currently. If you want the **fixed response** so maybe we should fix this.
@@ -42,6 +44,9 @@
   - does not see ```is_response_reliable```, ```get_validation_summary``` and ```get_validation_summary``` use anywhere but already defined 
 
 - Later need to change all the **printing stmts** now into the ```logger.info()```
+
+
+
 
 --- 
 

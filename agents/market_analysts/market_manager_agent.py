@@ -35,17 +35,17 @@ class MarketManagerAgent(BaseAgent):
             if self.llm_type == "openai":
                 return ChatOpenAI(
                     model=DEFAULT_MODELS["openai"],
-                    temperature=0.1
+                    temperature=0
                 )
             elif self.llm_type == "gemini":
                 return ChatGoogleGenerativeAI(
                     model=DEFAULT_MODELS["gemini"],
-                    temperature=0.1
+                    temperature=0
                 )
             elif self.llm_type == "qwen":
                 return Ollama(
                     model=DEFAULT_MODELS["qwen"],
-                    temperature=0.1
+                    temperature=0
                 )
             else:
                 raise ValueError(f"Unsupported LLM type: {self.llm_type}")
@@ -86,8 +86,10 @@ class MarketManagerAgent(BaseAgent):
             # Create the prompt
             user_prompt = MARKET_MANAGER_AGENT_USER_PROMPT.format(
                 query=question,
+                synthesis_result=synthesis_result,
                 opportunity_analysis=opportunities,
-                risk_analysis=risks
+                risk_analysis=risks,
+                contexts=input_data.get("contexts", [])
             )
             
             # Prepare messages

@@ -78,6 +78,11 @@ def format_hybrid_retrieval_result(result: Dict[str, Any]) -> str:
         for i, context in enumerate(result["patent_contexts"], 1):
             formatted += f"{i}. Patent {context['patent_id']} ({context['company_name']})\n{context['chunk']}\n\n"
     
-    return formatted 
+    return formatted
+
+def hybrid_rag_retrieval_tool_wrapper(query: str) -> str:
+    """Wrapper for hybrid RAG retrieval tool that handles single parameter calls and returns formatted string."""
+    result = hybrid_rag_retrieval_tool(query, top_k=3)
+    return format_hybrid_retrieval_result(result) 
 
 

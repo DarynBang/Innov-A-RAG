@@ -21,6 +21,9 @@ from transformers import (
     AutoProcessor
 )
 import torch
+from utils.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 _model: Qwen2_5_VLForConditionalGeneration = None
@@ -42,7 +45,7 @@ def get_qwen_vl_model_and_processor():
         #
         model_name = "Qwen/Qwen2.5-VL-3B-Instruct"
         # model_name = r"unsloth/Qwen2.5-VL-7B-Instruct-bnb-4bit"
-        print(f"📦 Loading {model_name} model & processor…")
+        logger.info(f"Loading {model_name} model & processor…")
         _model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             model_name,
             torch_dtype=torch.bfloat16,
@@ -55,6 +58,6 @@ def get_qwen_vl_model_and_processor():
             min_pixels=256 * 28 * 28,
             max_pixels=640 * 28 * 28
         )
-        print("✅ Loaded shared Qwen2.5-VL model + processor")
+        logger.info("Loaded shared Qwen2.5-VL model + processor")
     return _model, _processor
 
