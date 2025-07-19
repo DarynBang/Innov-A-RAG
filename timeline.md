@@ -45,6 +45,12 @@
 
 - Later need to change all the **printing stmts** now into the ```logger.info()```
 
+## 17:00
+
+- The hybrid retrieval is now in used but yeh still need to check 
+- Fix LLM temp to 0 to have fixed response 
+- Now the tools are dynamically added to the prompt, not manually anymore 
+- Need to check the Normalize, Planning and Fact Checking Agent again. 
 
 
 
