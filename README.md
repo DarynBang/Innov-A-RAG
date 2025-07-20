@@ -80,9 +80,6 @@ agent_config = {
 # Or with custom query
 python main.py --mode query --query "Tell me about TechNova's business focus and market opportunities"
 
-# Test legacy workflow (backward compatibility)
-python main.py --mode query --query "What are the latest AI patent trends?" --legacy
-
 # Interactive chat mode
 python main.py --mode chat
 

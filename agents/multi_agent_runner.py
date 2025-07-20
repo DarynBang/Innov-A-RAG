@@ -235,39 +235,6 @@ class MultiAgentRunner:
                 "status": "failed"
             }
 
-    def run_legacy_workflow(self, initial_input: Dict[str, str], 
-                           patent_contexts: Optional[List[dict]] = None,
-                           firm_summary_contexts: Optional[List[dict]] = None) -> str:
-        """
-        Run the legacy multi-agent workflow for backward compatibility.
-        
-        Args:
-            initial_input: Dictionary with query and other information
-            patent_contexts: Legacy patent contexts
-            firm_summary_contexts: Legacy firm contexts
-            
-        Returns:
-            Final analysis string
-        """
-        logger.info("Running legacy workflow for backward compatibility")
-        
-        query = initial_input.get("question", "")
-        if not query:
-            return "No query provided"
-        
-        try:
-            # Use enhanced workflow but return only final result
-            results = self.run_enhanced_workflow(query)
-            
-            if "error" in results:
-                return f"Error in workflow: {results['error']}"
-            
-            return results.get("market_analysis", {}).get("final_analysis", "No analysis generated")
-            
-        except Exception as e:
-            logger.error(f"Error in legacy workflow: {e}")
-            return f"Error processing query: {str(e)}"
-
     def _extract_sources_from_contexts(self, contexts: List[Dict[str, Any]]) -> List[str]:
         """Extract source information from retrieved contexts."""
         sources = []
@@ -333,7 +300,7 @@ class MultiAgentRunner:
         
         logger.info("\n" + "="*80 + "\n")
 
-    # Backward compatibility alias
-    run = run_legacy_workflow
+    # Alias
+    run = run_enhanced_workflow
 
 

@@ -7,10 +7,8 @@ setup_logging()
 
 from tools.company_tools import get_company_tools
 from tools.patent_tools import get_patent_tools
-from retrieval.hybrid_retriever import HybridRetriever
-from utils.data_mapping import create_mapping_manager, DataMappingManager
-from typing import Dict, List, Any
-import os
+from utils.data_mapping import create_mapping_manager
+from typing import Dict, Any
 
 logger = get_logger(__name__)
 
@@ -301,7 +299,6 @@ class EnhancedHybridRAGTools:
             logger.error(f"Error in mapping key search: {e}")
             return {"error": str(e), "success": False}
 
-
 # Global instance
 _enhanced_hybrid_tools = None
 
@@ -360,3 +357,4 @@ def mapping_key_search_tool(company_name: str = None,
     """
     tools = get_enhanced_hybrid_tools()
     return tools.search_by_mapping_key(company_name, hojin_id, patent_id, chunk_index) 
+

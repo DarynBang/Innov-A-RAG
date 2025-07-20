@@ -52,3 +52,5 @@ def setup_logging(logfile: str = "assistant.log", level: int = logging.INFO):
 def get_logger(name: str):
     """Get a logger with the specified name."""
     return logging.getLogger(name)
+
+

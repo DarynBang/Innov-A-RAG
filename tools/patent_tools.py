@@ -139,6 +139,7 @@ def patent_rag_retrieval_tool(query: str, top_k: int = 5) -> str:
     
     return result
 
+# The reason for this wrapper is to ensure the tool can be called with a single parameter in LangChain
 def patent_rag_retrieval_tool_wrapper(query: str) -> str:
     """Wrapper for patent RAG retrieval tool that handles single parameter calls."""
     return patent_rag_retrieval_tool(query, top_k=5) 

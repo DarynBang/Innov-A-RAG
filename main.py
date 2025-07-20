@@ -31,15 +31,12 @@ def main():
     parser.add_argument('--mode', choices=['query', 'test', 'ingest', 'chat'], required=True, help='Workflow mode to run')
     parser.add_argument('--query', type=str, help='User query (required for query mode)')
     parser.add_argument('--force_reindex', action='store_true', help='Force reindex during ingestion')
-    parser.add_argument('--legacy', action='store_true', help='Use legacy workflow for backward compatibility')
     args = parser.parse_args()
     
     logger.info(f"Running in {args.mode} mode with {DEFAULT_LLM_TYPE} LLM (configured in agent_config.py)")
     if args.query:
         logger.info(f"Query: {args.query}")
-    if args.legacy:
-        logger.info("Using legacy workflow mode")
-
+    
     # Load data and configs
     index_dir = "RAG_INDEX"
     logger.info("Loading patent and firm data...")
@@ -117,43 +114,15 @@ def main():
         logger.info(f"Processing query: {question}")
         
         try:
-            if args.legacy:
-                # Run legacy workflow for backward compatibility
-                logger.info("Using legacy workflow...")
-                
-                # Retrieve contexts using RAG systems
-                logger.info("Retrieving patent contexts...")
-                patent_contexts = patent_rag.retrieve_patent_contexts(question, top_k=3)
-                logger.info(f"Retrieved {len(patent_contexts)} patent contexts")
-                
-                logger.info("Retrieving firm contexts...")
-                firm_contexts = firm_rag.retrieve_firm_contexts(question, top_k=3)
-                logger.info(f"Retrieved {len(firm_contexts)} firm contexts")
-                
-                # Run legacy workflow
-                result = runner.run_legacy_workflow(
-                    {"question": question}, 
-                    patent_contexts=patent_contexts, 
-                    firm_summary_contexts=firm_contexts
-                )
-                
-                logger.info("Legacy workflow completed successfully")
-                logger.info("\n" + "="*80)
-                logger.info("FINAL RESULT:")
-                logger.info("="*80)
-                logger.info(result)
-                logger.info("="*80)
-                
+            # Run enhanced workflow
+            logger.info("Using enhanced workflow...")
+            results = runner.run_enhanced_workflow(question)
+            
+            if "error" in results:
+                logger.error(f"Workflow failed: {results['error']}")
             else:
-                # Run enhanced workflow
-                logger.info("Using enhanced workflow...")
-                results = runner.run_enhanced_workflow(question)
-                
-                if "error" in results:
-                    logger.error(f"Workflow failed: {results['error']}")
-                else:
-                    logger.info("Enhanced workflow completed successfully")
-                    # Summary already printed by the workflow
+                logger.info("Enhanced workflow completed successfully")
+                # Summary already printed by the workflow
             
         except Exception as e:
             logger.error(f"Error during query processing: {e}")
@@ -171,7 +140,7 @@ def main():
         try:
             while True:
                 try:
-                    question = input("🤖 Ask me anything: ").strip()
+                    question = input("Ask me anything: ").strip()
                     
                     if not question:
                         continue

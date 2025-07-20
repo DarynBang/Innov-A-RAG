@@ -14,8 +14,7 @@ setup_logging()
 
 import json
 import os
-import pandas as pd
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 from collections import defaultdict
 
 logger = get_logger(__name__)
@@ -138,7 +137,6 @@ class CompanyDataMapper:
             "companies_with_chunks": len(self.hojin_to_chunks),
             "avg_chunks_per_company": sum(len(chunks) for chunks in self.hojin_to_chunks.values()) / max(len(self.hojin_to_chunks), 1)
         }
-
 
 class PatentDataMapper:
     """Enhanced mapping for patent data chunks."""
@@ -287,7 +285,6 @@ class PatentDataMapper:
             "avg_patents_per_company": sum(len(patents) for patents in self.company_to_patents.values()) / max(len(self.company_to_patents), 1)
         }
 
-
 class DataMappingManager:
     """Manager class for both company and patent data mappings."""
     
@@ -351,7 +348,6 @@ class DataMappingManager:
             "company_name": company_identifier
         }
 
-
 # Utility functions for easy access
 def create_mapping_manager(index_dir: str = "RAG_INDEX") -> DataMappingManager:
     """Create and initialize a data mapping manager."""
@@ -372,3 +368,4 @@ def get_patent_chunk(company_name: str, hojin_id: str, patent_id: str, chunk_ind
     if mapper.load_mappings():
         return mapper.get_chunk_by_key(company_name, hojin_id, patent_id, chunk_index)
     return None 
+

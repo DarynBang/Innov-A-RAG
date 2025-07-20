@@ -31,7 +31,7 @@ class CompanyTools:
         logger.info(f"Looking up exact company info for: {company_identifier}")
         
         try:
-            # Search by company name
+            # Search by company name - allows substring matching (case-insensitive)
             name_match = self.firm_df[
                 self.firm_df['company_name'].str.contains(company_identifier, case=False, na=False)
             ]
@@ -146,6 +146,7 @@ def company_rag_retrieval_tool(query: str, top_k: int = 5) -> str:
     
     return result
 
+# The reason for this wrapper is to allow single parameter calls in LangChain
 def company_rag_retrieval_tool_wrapper(query: str) -> str:
     """Wrapper for company RAG retrieval tool that handles single parameter calls."""
     return company_rag_retrieval_tool(query, top_k=5) 

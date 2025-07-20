@@ -6,7 +6,7 @@ setup_logging()
 
 from tools.company_tools import get_company_tools
 from tools.patent_tools import get_patent_tools
-from typing import Dict, List, Any
+from typing import Dict, Any
 
 logger = get_logger(__name__)
 
@@ -80,6 +80,7 @@ def format_hybrid_retrieval_result(result: Dict[str, Any]) -> str:
     
     return formatted
 
+# This wrapper function allows single parameter calls in LangChain
 def hybrid_rag_retrieval_tool_wrapper(query: str) -> str:
     """Wrapper for hybrid RAG retrieval tool that handles single parameter calls and returns formatted string."""
     result = hybrid_rag_retrieval_tool(query, top_k=3)
