@@ -22,8 +22,7 @@ class FirmSummaryRAG:
         # Data + paths
         self.df = df
         self.index_dir = index_dir
-        self.embed_model = config.get("embed_model")
-        self.device = config.get("device", torch.cuda.is_available() and "cuda" or "cpu")
+        self.embed_model = config.get("embed_model", "sentence-transformers/all-MiniLM-L6-v2")
         self.chunk_size = config.get("chunk_size", 2048)
         self.chunk_overlap = config.get("chunk_overlap", 256)
         self.batch_size = config.get("batch_size", 5000)
@@ -149,7 +148,7 @@ class FirmSummaryRAG:
         summary_text: str
     ):
         """
-        Incrementally add one company’s summary:
+        Incrementally add one company's summary:
         check existing, chunk, update JSON + Chroma.
         """
         # ensure chunks are loaded
@@ -218,6 +217,7 @@ class FirmSummaryRAG:
                              "run ingest_all() first.")
 
         # Query Chroma (returns cosine *distances*)
+        # Score = 1 - distance (not exactly a similarity score, but works for ranking)
         result    = collection.query(query_texts=[query], n_results=top_k)
         ids       = result["ids"][0]
         distances = result["distances"][0]
@@ -236,7 +236,7 @@ class FirmSummaryRAG:
                 "company_keywords": meta["company_keywords"],
                 "chunk_index":      meta["chunk_index"],
                 "rank":             rank,
-                "score":            float(1.0 - dist)
+                "score":            float(1.0 - dist) 
             })
 
         return contexts

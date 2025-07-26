@@ -31,34 +31,63 @@ class CompanyTools:
         logger.info(f"Looking up exact company info for: {company_identifier}")
         
         try:
-            # Search by company name - allows substring matching (case-insensitive)
+            # First, try exact matches (case-insensitive)
+            exact_name_match = self.firm_df[
+                self.firm_df['company_name'].str.lower() == company_identifier.lower()
+            ]
+            
+            exact_id_match = self.firm_df[
+                self.firm_df['hojin_id'].astype(str) == company_identifier
+            ]
+            
+            # Combine exact matches
+            exact_matches = pd.concat([exact_name_match, exact_id_match]).drop_duplicates()
+            
+            if not exact_matches.empty:
+                # Found exact match - use it
+                company_data = exact_matches.iloc[0].to_dict()
+                logger.info(f"Found EXACT company match: {company_data.get('company_name', 'N/A')}")
+                
+                return {
+                    "success": True,
+                    "message": f"Exact company match found for '{company_identifier}'",
+                    "data": {
+                        "company_name": company_data.get("company_name", ""),
+                        "hojin_id": company_data.get("hojin_id", ""),
+                        "company_keywords": company_data.get("company_keywords", ""),
+                        "summary": company_data.get("summary", "")
+                    }
+                }
+            
+            # If no exact match, try substring matching (case-insensitive)
+            logger.info(f"No exact match found, trying substring search for: {company_identifier}")
+            
             name_match = self.firm_df[
                 self.firm_df['company_name'].str.contains(company_identifier, case=False, na=False)
             ]
             
-            # Search by hojin_id
             id_match = self.firm_df[
                 self.firm_df['hojin_id'].astype(str).str.contains(company_identifier, case=False, na=False)
             ]
             
-            # Combine results
-            matches = pd.concat([name_match, id_match]).drop_duplicates()
+            # Combine substring results
+            substring_matches = pd.concat([name_match, id_match]).drop_duplicates()
             
-            if matches.empty:
-                logger.warning(f"No exact match found for company: {company_identifier}")
+            if substring_matches.empty:
+                logger.warning(f"No match found for company: {company_identifier}")
                 return {
                     "success": False,
-                    "message": f"No exact match found for company: {company_identifier}",
+                    "message": f"No company found matching '{company_identifier}'. Please check the company name or ID.",
                     "data": None
                 }
             
-            # Return first match (most relevant)
-            company_data = matches.iloc[0].to_dict()
-            logger.info(f"Found exact company match: {company_data.get('company_name', 'N/A')}")
+            # Return first substring match with note
+            company_data = substring_matches.iloc[0].to_dict()
+            logger.info(f"Found substring company match: {company_data.get('company_name', 'N/A')}")
             
             return {
                 "success": True,
-                "message": "Company information retrieved successfully",
+                "message": f"Partial match found for '{company_identifier}' (found: {company_data.get('company_name', 'Unknown')})",
                 "data": {
                     "company_name": company_data.get("company_name", ""),
                     "hojin_id": company_data.get("hojin_id", ""),
@@ -96,6 +125,57 @@ class CompanyTools:
         except Exception as e:
             logger.error(f"Error retrieving company contexts: {e}")
             return []
+
+    @property
+    def vectorstore(self):
+        """Expose ChromaDB collection for hybrid retrieval."""
+        try:
+            collection = self.firm_rag.client.get_collection(name=self.firm_rag.collection_name)
+            return collection
+        except Exception as e:
+            logger.warning(f"Could not access company collection: {e}")
+            return None
+    
+    @property
+    def chroma_client(self):
+        """Expose ChromaDB client."""
+        return self.firm_rag.client if hasattr(self.firm_rag, 'client') else None
+    
+    def get_all_documents_and_metadatas(self):
+        """Get all documents and metadatas for hybrid retrieval setup."""
+        try:
+            # Ensure chunks are loaded
+            if not self.firm_rag.all_chunks or not self.firm_rag.all_metadatas:
+                self.firm_rag.build_chunks(force_reindex=False)
+            
+            # Update metadatas to include proper doc_id and source_name for HybridRetriever
+            updated_metadatas = []
+            for i, metadata in enumerate(self.firm_rag.all_metadatas):
+                updated_metadata = metadata.copy()
+                
+                # Add doc_id for deduplication
+                company_id = updated_metadata.get('company_id', 'unknown')
+                chunk_index = updated_metadata.get('chunk_index', i)
+                updated_metadata['doc_id'] = f"company_{company_id}_{chunk_index}"
+                
+                # Add source_name for better results display
+                if 'company_name' in updated_metadata:
+                    updated_metadata['source_name'] = updated_metadata['company_name']
+                else:
+                    updated_metadata['source_name'] = f"Company {company_id}"
+                    
+                # Add source type
+                updated_metadata['source_type'] = 'company'
+                
+                updated_metadatas.append(updated_metadata)
+            
+            return {
+                'documents': self.firm_rag.all_chunks,
+                'metadatas': updated_metadatas
+            }
+        except Exception as e:
+            logger.error(f"Error getting company documents: {e}")
+            return {'documents': [], 'metadatas': []}
 
 # Global instance - will be initialized in main
 company_tools_instance: Optional[CompanyTools] = None

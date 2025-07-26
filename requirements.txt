@@ -14,6 +14,11 @@ tiktoken
 pandas
 numpy
 
+# Performance and caching
+redis
+diskcache
+psutil
+
 # Environment and configuration
 python-dotenv
 
@@ -26,3 +31,48 @@ rank-bm25
 # Utilities
 tqdm
 typing-extensions
+
+# Added Optimized Packages 
+# 25/07/2025 
+# Additional requirements for InnovARAG optimization features
+# Install these in addition to your existing requirements.txt
+
+# FAISS for approximate nearest neighbor search
+faiss-cpu>=1.7.4
+# faiss-gpu            # Use this instead if you have GPU support
+
+# Caching libraries
+redis>=4.5.0
+diskcache>=5.6.0
+
+# Dimensionality reduction (optional)
+scikit-learn>=1.3.0
+umap-learn>=0.5.0  # For UMAP dimensionality reduction
+
+# Async and parallel processing
+asyncio-throttle>=1.0.0
+aiofiles>=23.0.0
+
+# Performance monitoring
+psutil>=5.9.0  # For system resource monitoring
+memory-profiler>=0.61.0  # For memory usage profiling
+
+# Additional utilities
+tqdm>=4.65.0  # For progress bars during indexing
+joblib>=1.3.0  # For parallel processing utilities
+
+# Data structures and algorithms
+sortedcontainers>=2.4.0  # For efficient sorted data structures
+lru-dict>=1.2.0  # For LRU cache implementations
+
+# Optional: Advanced embedding models
+# sentence-transformers>=2.2.0  # Already in your requirements, but ensure latest version
+
+# Optional: GPU acceleration utilities (if using GPU)
+# cupy>=12.0.0  # For GPU-accelerated computations
+# cudf>=23.0.0  # For GPU-accelerated dataframes
+
+# Development and testing
+pytest-asyncio>=0.21.0  # For testing async functions
+pytest-benchmark>=4.0.0  # For performance benchmarking 
+

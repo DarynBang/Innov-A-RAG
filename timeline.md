@@ -75,9 +75,58 @@
   - Current problem for our systems: when asking a general questions like "tell me about the patents of company ABC" --> our system cannot understand this nice. Currently, it would perform RAG retrieval on company data. BUT the expected things to be done is that, it should get the ID or the name of the company, then perform that on the RAG retrieval for patents or performing retrieving exact patents information of the company.
   - And more, for example when asking a general question like "Tell me 3 patents that related to "Chemical Waste Industry". Then make a short comparisons", we can retrieve the patents and shortly compare them nicely. 
 
+- Currently, the tools registry is not work as i expected. Currently, when we have a function, we still need to somehow defined its locally not automatically into the prompts. So maybe we should make use of the Langchain tools or some other ways to make this auto and reduce the complex logic and coding of the current things. Maybe should check all the files or location thaat we 'touch' tools registry: `utils/tool_registry.py`, `tools/*`, normalize agent...
+
+- We should have a new logic like this: the planning or the normalize agent, they should define whether the question or subquestion need to continue process by the analysis team or not. If yes then we continue, If not we just skip there. I mean, if the question is just simply to answer something or find something, so we did not need to make use of the analysis team right? So yeah please make this logic for me professionally. 
+
+- And more, currently, the words "hybrid search" here what i mean is that, we should perform the Dense + Sparse search. We want hybrid search (sparse + dense retrieval) when we need both high recall and high semantic relevance, especially in scenarios where:
+  - Exact keyword matches are critical (sparse retrieval)
+  - Semantic similarity is equally important to capture (dense retrieval)
+  - The dataset contains both in-domain terms and out-of-vocabulary (OOV) or paraphrased queries
+
+- The input to the market opportunity and risk agents contains information about accummulated context but the generalize agent does not take care of it `accumulated_context` in the `_extract_context` of the `MarketOpportunityAgent`
+- Need to recheck this `_extract_sources_from_contexts` in MultiAgent cause it depends on the Normalized Agent so the Normalized Agent should output nicely.
+- It is likely that the Base Agent defined in the Agents Folders is not being used as the base class for other agents anymore isn't it. Recheck to see if we still need it or not. If yes so maybe we need to modified.
+- This part of the Streamlit app is not well UI
+
+  🔄 Initializing InnovARAG system...
+  Running initialize_innovarag()
+
+- In the Enhanced Features tab of the InnovARAG, we should have 
+  - the features for looking for the information of the companies based on its hojinid or its name
+  - the features for looking for the patents based on the patent unique id (`appln_id`). 
+  - there should be a feature for searching for companies based on the context query (like we need to have feature for testing the retrieval of the RAG Firm)
+  - there should be a feature like above but for RAG Patents 
+
+- 
+
+
+
 --- 
 
-# 21/07/2025 
+# 25/07/2025 
 
+- `tools/hybrid_rag_tools.py`: this file defines one tools that is `hybrid_rag_retrieval_tool_wrapper` function. The tool is used to retrieve the RAG context from both the firms and the patents. ==> Now this has been removed. 
+- Now, only the normalize agent has the Tools registry 
+- Force reindex for all the patents + Company summary all with GPT Summary
+
+- currently, the normalized agent is not good enough, the context does not contain the previous answer yet right, just part of it for example 1024 tokens only, which would ignore those older contexts
+
+```python
+Current question: How do these patents impact the market and competitive landscape in the machine learning industry?' (k=3)
+2025-07-25 16:55:47 INFO retrieval.optimized_hybrid_retriever: Metadata filters applied: 1589888 documents match
+2025-07-25 16:55:47 INFO retrieval.optimized_hybrid_retriever: FAISS search returned 3 results
+2025-07-25 16:55:47 INFO retrieval.optimized_hybrid_retriever: BM25 search returned 3 results
+2025-07-25 16:55:47 INFO retrieval.optimized_hybrid_retriever: FAISS search returned 3 results
+2025-07-25 16:58:04 INFO retrieval.optimized_hybrid_retriever: BM25 search returned 3 results
+2025-07-25 16:58:04 INFO retrieval.optimized_hybrid_retriever: Fusing results with optimized algorithm
+2025-07-25 16:58:04 INFO retrieval.optimized_hybrid_retriever: Optimized fusion completed: 6 unique documents
+2025-07-25 16:58:04 INFO retrieval.optimized_hybrid_retriever: Async hybrid retrieval completed in 137.889s, returning 3 results
+```
+
+==> TIME NEEDED STILL TOO MUCH
+
+- fix the market manager to not only suggest like currently, but also contain the opportunity and risk summary from the 2 oppor and risk agents. 
+- 
 
 

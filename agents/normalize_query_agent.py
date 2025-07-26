@@ -1,7 +1,7 @@
 """
 NormalizeQueryAgent: Classifies and normalizes user queries using LLM.
 Determines if query is about company, patent, or general technology/market analysis.
-Enhanced with tool integration and comprehensive prompts.
+Enhanced with Langchain tool integration and comprehensive prompts.
 """
 from utils.logging_utils import setup_logging, get_logger
 setup_logging()
@@ -12,11 +12,10 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.llms import Ollama
 from langchain_core.messages import SystemMessage, HumanMessage
 from config.prompts import (
-    NORMALIZE_AGENT_SYSTEM_PROMPT,
-    NORMALIZE_AGENT_USER_PROMPT,
-    DEFAULT_MODELS
+    DEFAULT_MODELS,
+    NORMALIZE_AGENT_USER_PROMPT
 )
-from utils.tool_registry import get_tool_registry, AdvancedNormalizeQueryAgent
+from utils.langchain_tool_registry import get_langchain_tool_registry
 import json
 import re
 from typing import Dict, List, Any
@@ -31,6 +30,7 @@ class NormalizeQueryAgent(BaseAgent):
         self.llm_type = qa_model
         self.llm = self._initialize_llm()
         self.available_tools = []
+        self.langchain_registry = get_langchain_tool_registry()
         
         logger.info("NormalizeQueryAgent initialized successfully")
     
@@ -64,29 +64,46 @@ class NormalizeQueryAgent(BaseAgent):
         super().register_tools(tools)
         self.available_tools = list(tools.keys()) if tools else []
         
-        # Register tools with the global registry for enhanced functionality
-        from utils.tool_registry import register_innovarag_tools
-        register_innovarag_tools(tools)
-        
-        # Create advanced agent wrapper
-        tool_registry = get_tool_registry()
-        self.advanced_agent = AdvancedNormalizeQueryAgent(self, tool_registry)
-        
         logger.info(f"Registered {len(self.available_tools)} tools: {self.available_tools}")
     
-    def _clean_json_response(self, response_text: str) -> str:
-        """Clean the response text to extract pure JSON."""
-        # Remove markdown code blocks
-        response_text = re.sub(r'```json\s*', '', response_text)
-        response_text = re.sub(r'```\s*$', '', response_text)
+    def _generate_dynamic_system_prompt(self) -> str:
+        """Generate dynamic system prompt with current tool information."""
+        prompt_section = self.langchain_registry.generate_prompt_section()
         
-        # Find JSON object in the response
-        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-        if json_match:
-            return json_match.group(0).strip()
-        
-        return response_text.strip()
-    
+        return f"""
+            You are a Query Normalization Agent responsible for classifying queries and extracting relevant identifiers.
+
+            Your role is to:
+            1. Classify each query as 'company', 'patent', 'company_patents', 'comparison', or 'general'
+            2. Extract specific identifiers when available (company names, patent IDs)
+            3. Recommend the best tools to use for information retrieval
+            4. Handle complex queries that involve both companies and patents
+
+            Classification Guidelines:
+            - 'company': Queries asking about specific companies, their business, financials, market position
+            - 'patent': Queries asking about specific patents or patent portfolios
+            - 'company_patents': Queries asking about patents of specific companies
+            - 'comparison': Queries comparing multiple entities (companies, patents, technologies)
+            - 'general': Broad industry trends, or queries that don't focus on specific entities
+
+            Special handling for company-patent relationships:
+            - "patents of company X" → use exact_company_lookup + patent_rag_retrieval
+            - "company X's patent portfolio" → use exact_company_lookup + patent_rag_retrieval
+            - "tell me about company X patents" → use exact_company_lookup + patent_rag_retrieval
+
+            {prompt_section}
+
+            Output format: JSON with the following structure:
+            {{
+                "query_type": "company|patent|company_patents|comparison|general",
+                "identifiers": {{
+                    "companies": ["company1", "company2", ...],
+                    "patents": ["patent1", "patent2", ...]
+                }},
+                "recommended_tools": ["tool1", "tool2", ...],
+                "reasoning": "Explanation of classification and tool selection"
+            }}"""
+
     def normalize_query(self, query: str) -> Dict[str, Any]:
         """
         Normalize and categorize a user query with tool recommendations.
@@ -101,11 +118,12 @@ class NormalizeQueryAgent(BaseAgent):
         
         try:
             # Generate dynamic system prompt with tool descriptions
-            tool_registry = get_tool_registry()
-            dynamic_system_prompt = self._generate_dynamic_system_prompt(tool_registry)
+            dynamic_system_prompt = self._generate_dynamic_system_prompt()
             
-            # Create the prompt
-            user_prompt = NORMALIZE_AGENT_USER_PROMPT.format(query=query)
+            # Create the user prompt
+            user_prompt = NORMALIZE_AGENT_USER_PROMPT.format(
+                query=query
+            )
             
             # Prepare messages
             messages = [
@@ -129,6 +147,9 @@ class NormalizeQueryAgent(BaseAgent):
             # Parse JSON response
             normalized_result = self._parse_normalization_response(content)
             
+            # Apply exact matching heuristics to improve tool selection
+            normalized_result = self._apply_exact_matching_heuristics(query, normalized_result)
+            
             logger.info(f"Query normalized as '{normalized_result.get('query_type', 'unknown')}' type")
             
             return normalized_result
@@ -139,7 +160,7 @@ class NormalizeQueryAgent(BaseAgent):
             return {
                 "query_type": "general",
                 "identifiers": {"companies": [], "patents": []},
-                "recommended_tools": ["hybrid_rag_retrieval"],
+                "recommended_tools": ["enhanced_hybrid_rag_retrieval"],
                 "reasoning": f"Error during normalization: {str(e)}",
                 "error": str(e)
             }
@@ -163,37 +184,14 @@ class NormalizeQueryAgent(BaseAgent):
             # Get recommended tools
             recommended_tools = normalized_result.get('recommended_tools', [])
             identifiers = normalized_result.get('identifiers', {})
+            query_type = normalized_result.get('query_type', 'general')
             
-            # Invoke recommended tools
+            # Enhanced tool execution with workflow awareness
             retrieved_contexts = []
             if self.tool_executor:
-                for tool_name in recommended_tools:
-                    if tool_name in self.tool_executor:
-                        try:
-                            logger.debug(f"Invoking tool: {tool_name}")
-                            
-                            # Prepare tool input based on tool type and identifiers
-                            tool_input = self._prepare_tool_input(tool_name, query, identifiers)
-                            
-                            # Invoke the tool
-                            tool_result = self.tool_executor[tool_name](tool_input)
-                            
-                            retrieved_contexts.append({
-                                "tool": tool_name,
-                                "input": tool_input,
-                                "result": tool_result
-                            })
-                            
-                            logger.debug(f"Tool {tool_name} returned {len(str(tool_result))} characters")
-                            
-                        except Exception as e:
-                            logger.error(f"Error invoking tool {tool_name}: {e}")
-                            retrieved_contexts.append({
-                                "tool": tool_name,
-                                "error": str(e)
-                            })
-                    else:
-                        logger.warning(f"Recommended tool {tool_name} not available")
+                retrieved_contexts = self._execute_tools_with_workflow_awareness(
+                    recommended_tools, query, identifiers, query_type
+                )
             
             # Combine results
             result = {
@@ -214,6 +212,109 @@ class NormalizeQueryAgent(BaseAgent):
                 "total_contexts": 0,
                 "error": str(e)
             }
+
+    def _execute_tools_with_workflow_awareness(self, recommended_tools: List[str], query: str, 
+                                             identifiers: Dict[str, List[str]], query_type: str) -> List[Dict[str, Any]]:
+        """
+        Execute tools with enhanced workflow awareness for better results.
+        
+        Args:
+            recommended_tools: List of recommended tool names
+            query: Original query
+            identifiers: Extracted identifiers
+            query_type: Type of query
+            
+        Returns:
+            List of context dictionaries from tool execution
+        """
+        retrieved_contexts = []
+        executed_tools = set()
+        
+        # Handle special cases based on query type
+        if query_type == "company_patents" and identifiers.get('companies'):
+            # For company-patent queries, use exact company lookup + company patents lookup
+            company_name = identifiers['companies'][0]
+            
+            # 1. Get exact company information
+            if "exact_company_lookup" in self.tool_executor:
+                try:
+                    company_result = self.tool_executor["exact_company_lookup"](company_name)
+                    retrieved_contexts.append({
+                        "tool": "exact_company_lookup",
+                        "input": company_name,
+                        "result": company_result,
+                        "execution_type": "primary"
+                    })
+                    executed_tools.add("exact_company_lookup")
+                    logger.debug(f"Executed exact_company_lookup for {company_name}")
+                except Exception as e:
+                    logger.error(f"Error in exact_company_lookup: {e}")
+            
+            # 2. Get patents owned by that company using the new tool
+            if "company_patents_lookup" in self.tool_executor:
+                try:
+                    patents_result = self.tool_executor["company_patents_lookup"](company_name)
+                    retrieved_contexts.append({
+                        "tool": "company_patents_lookup",
+                        "input": company_name,
+                        "result": patents_result,
+                        "execution_type": "enhanced"
+                    })
+                    executed_tools.add("company_patents_lookup")
+                    logger.debug(f"Executed company_patents_lookup for {company_name}")
+                except Exception as e:
+                    logger.error(f"Error in company_patents_lookup: {e}")
+                    
+                    # Fallback to patent_rag_retrieval if company_patents_lookup fails
+                    if "patent_rag_retrieval" in self.tool_executor:
+                        try:
+                            enhanced_query = f"patents by {company_name} {query}"
+                            patent_result = self.tool_executor["patent_rag_retrieval"](enhanced_query)
+                            retrieved_contexts.append({
+                                "tool": "patent_rag_retrieval",
+                                "input": enhanced_query,
+                                "result": patent_result,
+                                "execution_type": "fallback"
+                            })
+                            executed_tools.add("patent_rag_retrieval")
+                            logger.debug(f"Executed patent_rag_retrieval as fallback")
+                        except Exception as fallback_e:
+                            logger.error(f"Error in patent_rag_retrieval fallback: {fallback_e}")
+        else:
+            # Standard tool execution for other query types
+            for tool_name in recommended_tools:
+                if tool_name in self.tool_executor and tool_name not in executed_tools:
+                    try:
+                        logger.debug(f"Invoking tool: {tool_name}")
+                        
+                        # Prepare tool input based on tool type and identifiers
+                        tool_input = self._prepare_tool_input(tool_name, query, identifiers)
+                        
+                        # Invoke the tool
+                        tool_result = self.tool_executor[tool_name](tool_input)
+                        
+                        retrieved_contexts.append({
+                            "tool": tool_name,
+                            "input": tool_input,
+                            "result": tool_result,
+                            "execution_type": "standard"
+                        })
+                        
+                        executed_tools.add(tool_name)
+                        logger.debug(f"Tool {tool_name} returned {len(str(tool_result))} characters")
+                        
+                    except Exception as e:
+                        logger.error(f"Error invoking tool {tool_name}: {e}")
+                        retrieved_contexts.append({
+                            "tool": tool_name,
+                            "error": str(e),
+                            "execution_type": "error"
+                        })
+                else:
+                    if tool_name not in self.tool_executor:
+                        logger.warning(f"Recommended tool {tool_name} not available")
+        
+        return retrieved_contexts
 
     # This is defined but not used yet
     def run(self, input_data: dict) -> dict:
@@ -243,8 +344,8 @@ class NormalizeQueryAgent(BaseAgent):
             # Use new normalization method
             normalized_result = self.normalize_query(query)
             
-            # Convert to legacy format for backward compatibility
-            legacy_result = {
+            # Convert to format for backward compatibility
+            result = {
                 "category": normalized_result.get("query_type", "general"),
                 "company_names": normalized_result.get("identifiers", {}).get("companies", []),
                 "patent_ids": normalized_result.get("identifiers", {}).get("patents", []),
@@ -254,8 +355,8 @@ class NormalizeQueryAgent(BaseAgent):
                 "reasoning": normalized_result.get("reasoning", "")
             }
             
-            logger.info(f"Query classified as: {legacy_result.get('category', 'unknown')}")
-            return legacy_result
+            logger.info(f"Query classified as: {result.get('category', 'unknown')}")
+            return result
                 
         except Exception as e:
             logger.error(f"Error in query normalization: {e}")
@@ -267,7 +368,7 @@ class NormalizeQueryAgent(BaseAgent):
         
         Args:
             tool_name: Name of the tool to invoke
-            query: Original user query
+            query: Original user query (may contain "Previous context:" format)
             identifiers: Extracted identifiers (companies, patents)
             
         Returns:
@@ -276,14 +377,111 @@ class NormalizeQueryAgent(BaseAgent):
         companies = identifiers.get('companies', [])
         patents = identifiers.get('patents', [])
         
+        # Extract actual question from enhanced context format
+        actual_query = self._extract_actual_question(query)
+        
         if tool_name == "exact_company_lookup" and companies:
             return companies[0]  # Use first company
         elif tool_name == "exact_patent_lookup" and patents:
             return patents[0]  # Use first patent
-        elif tool_name in ["company_rag_retrieval", "patent_rag_retrieval", "hybrid_rag_retrieval"]:
-            return query  # Use original query for RAG tools
+        elif tool_name == "company_patents_lookup" and companies:
+            return companies[0]  # Use first company for company patents lookup
+        elif tool_name in ["company_rag_retrieval", "patent_rag_retrieval", "hybrid_rag_retrieval", "enhanced_hybrid_rag_retrieval", "optimized_hybrid_rag_retrieval"]:
+            return query  # Use full query (with context) for RAG tools as they can benefit from context
         else:
-            return query  # Default to original query
+            return actual_query  # Use extracted question for other tools
+    
+    def _extract_actual_question(self, query: str) -> str:
+        """
+        Extract the actual question from enhanced context format.
+        
+        Args:
+            query: Query that may contain "Previous context:" and "Current question:"
+            
+        Returns:
+            The actual question without previous context
+        """
+        if "Current question:" in query:
+            # Extract everything after "Current question:"
+            parts = query.split("Current question:", 1)
+            if len(parts) > 1:
+                return parts[1].strip()
+        
+        return query  # Return original if no special format
+    
+    def _apply_exact_matching_heuristics(self, query: str, normalized_result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Apply heuristics to improve exact matching for simple queries.
+        
+        Args:
+            query: Original query
+            normalized_result: Result from LLM normalization
+            
+        Returns:
+            Enhanced normalized result with better tool selection
+        """
+        query_lower = query.lower().strip()
+        identifiers = normalized_result.get('identifiers', {})
+        companies = identifiers.get('companies', [])
+        patents = identifiers.get('patents', [])
+        
+        # Heuristic 1: Single company name queries should use exact lookup
+        if (len(companies) == 1 and len(patents) == 0 and 
+            len(query.split()) <= 3 and 
+            not any(word in query_lower for word in ['compare', 'find', 'search', 'analyze', 'trends', 'strategies'])):
+            
+            logger.info(f"Applying exact company lookup heuristic for: {query}")
+            normalized_result['query_type'] = 'company'
+            normalized_result['recommended_tools'] = ['exact_company_lookup']
+            normalized_result['reasoning'] += ' [Enhanced with exact matching heuristic]'
+            return normalized_result
+        
+        # Heuristic 2: Single patent ID queries should use exact lookup
+        if (len(patents) == 1 and len(companies) == 0 and 
+            len(query.split()) <= 4 and
+            any(word in query_lower for word in ['patent', 'tell me about', 'information about', 'details about'])):
+            
+            logger.info(f"Applying exact patent lookup heuristic for: {query}")
+            normalized_result['query_type'] = 'patent'
+            normalized_result['recommended_tools'] = ['exact_patent_lookup']
+            normalized_result['reasoning'] += ' [Enhanced with exact matching heuristic]'
+            return normalized_result
+        
+        # Heuristic 3: "Company X patents" should use company_patents_lookup
+        if (len(companies) == 1 and 
+            any(word in query_lower for word in ['patents', 'patent portfolio', 'intellectual property', 'ip']) and
+            not any(word in query_lower for word in ['compare', 'analyze', 'trends', 'market'])):
+            
+            logger.info(f"Applying company patents lookup heuristic for: {query}")
+            normalized_result['query_type'] = 'company_patents'
+            normalized_result['recommended_tools'] = ['exact_company_lookup', 'company_patents_lookup']
+            normalized_result['reasoning'] += ' [Enhanced with company patents heuristic]'
+            return normalized_result
+        
+        # Heuristic 4: Queries about companies with specific attributes should use company search tools
+        if (any(phrase in query_lower for phrase in ['companies with', 'companies that', 'firms with', 'businesses with', 'find companies']) and
+            any(word in query_lower for word in ['tech', 'technology', 'ai', 'machine learning', 'biotech', 'semiconductor', 'name', 'called'])):
+            
+            logger.info(f"Applying company substring search heuristic for: {query}")
+            normalized_result['query_type'] = 'company'
+            normalized_result['recommended_tools'] = ['company_rag_retrieval', 'optimized_hybrid_rag_retrieval']
+            normalized_result['reasoning'] += ' [Enhanced with company substring search heuristic]'
+            return normalized_result
+        
+        # Heuristic 5: Simple lookup queries should prefer exact tools over hybrid
+        simple_lookup_patterns = ['what is', 'tell me about', 'information about', 'details about', 'show me']
+        if (any(pattern in query_lower for pattern in simple_lookup_patterns) and
+            len(companies) == 1 and len(patents) == 0):
+            
+            current_tools = normalized_result.get('recommended_tools', [])
+            if 'optimized_hybrid_rag_retrieval' in current_tools and 'exact_company_lookup' not in current_tools:
+                logger.info(f"Enhancing simple lookup with exact company lookup for: {query}")
+                normalized_result['recommended_tools'] = ['exact_company_lookup'] + current_tools
+                normalized_result['reasoning'] += ' [Enhanced with exact lookup priority]'
+            return normalized_result
+        
+        # Return original result if no heuristics apply
+        return normalized_result
     
     def _parse_normalization_response(self, response: str) -> Dict[str, Any]:
         """
@@ -319,7 +517,7 @@ class NormalizeQueryAgent(BaseAgent):
                     elif field == 'identifiers':
                         result[field] = {'companies': [], 'patents': []}
                     elif field == 'recommended_tools':
-                        result[field] = ['hybrid_rag_retrieval']
+                        result[field] = ['enhanced_hybrid_rag_retrieval']
                     elif field == 'reasoning':
                         result[field] = 'Query successfully normalized'
             
@@ -329,103 +527,57 @@ class NormalizeQueryAgent(BaseAgent):
             if 'patents' not in result['identifiers']:
                 result['identifiers']['patents'] = []
             
-            # Ensure recommended_tools is a list
-            if not isinstance(result['recommended_tools'], list):
-                result['recommended_tools'] = ['hybrid_rag_retrieval']
-            
-            logger.debug("Successfully parsed normalization response")
             return result
             
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON response: {e}")
-            logger.error(f"Raw response: {response}")
+            logger.error(f"Cleaned response: {response}")
             # Return fallback result
             return {
                 "query_type": "general",
                 "identifiers": {"companies": [], "patents": []},
-                "recommended_tools": ["hybrid_rag_retrieval"],
-                "reasoning": f"JSON parsing error: {e}",
-                "error": str(e)
+                "recommended_tools": ["enhanced_hybrid_rag_retrieval"],
+                "reasoning": f"JSON parsing error: {str(e)}"
             }
         
         except Exception as e:
             logger.error(f"Error parsing normalization response: {e}")
+            # Return fallback result
             return {
-                "query_type": "general", 
+                "query_type": "general",
                 "identifiers": {"companies": [], "patents": []},
-                "recommended_tools": ["hybrid_rag_retrieval"],
-                "reasoning": f"Parsing error: {e}",
-                "error": str(e)
+                "recommended_tools": ["enhanced_hybrid_rag_retrieval"],
+                "reasoning": f"Parsing error: {str(e)}"
             }
 
-    def _simple_classify(self, query: str) -> dict:
-        """Fallback classification method."""
-        logger.info("Using fallback classification method")
-        query_lower = query.lower()
-        
-        if "company" in query_lower or "firm" in query_lower:
-            category = "company"
-        elif "patent" in query_lower or "technology" in query_lower:
-            category = "patent"
-        else:
-            category = "general"
-            
-        return {
-            "category": category,
-            "company_names": [],
-            "patent_ids": [],
-            "keywords": query.split(),
-            "normalized_query": query
-        }
-    
-    def _generate_dynamic_system_prompt(self, tool_registry) -> str:
-        """Generate system prompt with dynamic tool descriptions."""
-        try:
-            # Get tool descriptions and examples from registry
-            tool_descriptions = tool_registry.get_tool_descriptions()
-            examples = tool_registry.generate_examples()
-            
-            # Format examples for prompt
-            example_text = ""
-            for example in examples:
-                example_text += f"""
-Query: "{example['query']}"
-Output: {{
-    "query_type": "{example['type']}",
-    "identifiers": {json.dumps(example['identifiers'])},
-    "recommended_tools": {json.dumps(example['tools'])},
-    "reasoning": "{example['reasoning']}"
-}}
-"""
-            
-            # Replace placeholders in system prompt
-            system_prompt = NORMALIZE_AGENT_SYSTEM_PROMPT.format(
-                TOOL_DESCRIPTIONS=tool_descriptions,
-                CLASSIFICATION_EXAMPLES=example_text
-            )
-            
-            return system_prompt
-            
-        except Exception as e:
-            logger.error(f"Error generating dynamic system prompt: {e}")
-            # Fallback to basic prompt
-            return NORMALIZE_AGENT_SYSTEM_PROMPT.replace("{TOOL_DESCRIPTIONS}", "Tools not available").replace("{CLASSIFICATION_EXAMPLES}", "Examples not available")
-    
-    def normalize_and_retrieve_enhanced(self, query: str) -> Dict[str, Any]:
+    def _simple_classify(self, query: str) -> Dict[str, Any]:
         """
-        Enhanced normalize and retrieve with sequential tool execution.
+        Simple rule-based classification as fallback.
         
         Args:
             query: User query
             
         Returns:
-            Enhanced results with sequential tool execution
+            Basic classification result
         """
-        if hasattr(self, 'advanced_agent'):
-            return self.advanced_agent.normalize_and_retrieve_advanced(query)
+        query_lower = query.lower()
+        
+        # Simple keyword-based classification
+        if any(word in query_lower for word in ['company', 'firm', 'business', 'corporation']):
+            category = 'company'
+        elif any(word in query_lower for word in ['patent', 'invention', 'ip', 'intellectual property']):
+            category = 'patent'
         else:
-            # Fallback to basic implementation
-            logger.warning("Advanced agent not available, using basic implementation")
-            return self.normalize_and_retrieve(query) 
+            category = 'general'
+        
+        return {
+            "category": category,
+            "company_names": [],
+            "patent_ids": [],
+            "keywords": query.split(),
+            "normalized_query": query,
+            "recommended_tools": ["enhanced_hybrid_rag_retrieval"],
+            "reasoning": "Fallback classification due to error"
+        } 
         
         

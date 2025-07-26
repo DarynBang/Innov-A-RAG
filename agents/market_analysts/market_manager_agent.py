@@ -54,11 +54,6 @@ class MarketManagerAgent(BaseAgent):
             logger.error(f"Failed to initialize {self.llm_type} LLM: {str(e)}")
             raise
 
-    def register_tools(self, tools: dict):
-        """Register tools for potential future use."""
-        self.tools.update(tools)
-        logger.info(f"Registered {len(tools)} tools: {list(tools.keys())}")
-
     def run(self, input_data: dict) -> str:
         """
         Synthesize the final answer using the selected LLM and outputs from opportunity/risk agents.

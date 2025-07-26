@@ -21,8 +21,7 @@ class PatentRAG:
     ):
         # Data + paths
         self.df = df
-        self.index_dir = index_dir
-        self.df = df
+        # self.df = df.sample(frac=0.05, random_state=42)
         self.index_dir = index_dir
         self.embed_model = config.get("embed_model")
         self.device = config.get("device", torch.cuda.is_available() and "cuda" or "cpu")
@@ -83,7 +82,7 @@ class PatentRAG:
             cid = row["hojin_id"]
             name = row["company_name"]
             patent_id   = row["appln_id"]
-            text = row["cleaned_patent"]
+            text = row["cleaned_patent"] if "cleaned_patent" in row else row["patent_abstract"]
 
             chunks = self.splitter.split_text(text)
             for i, chunk in enumerate(chunks):
@@ -244,7 +243,8 @@ class PatentRAG:
 def main():
     # CONFIGURATION
     INDEX_DIR = r"RAG_INDEX"
-    patent_csv = r'data/random100000_us_patents.csv'
+    # Use the proper config instead of hardcoded path
+    patent_csv = patent_config.get("patent_csv")
 
     patent_df = pd.read_csv(patent_csv)
     patent_df_test = patent_df.head(10000)

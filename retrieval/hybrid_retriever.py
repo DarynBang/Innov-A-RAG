@@ -5,6 +5,8 @@ Implements proper score fusion and deduplication.
 from utils.logging_utils import setup_logging, get_logger
 setup_logging()
 
+import os
+import pickle
 from langchain_community.retrievers import BM25Retriever
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -20,7 +22,7 @@ class HybridRetriever:
     HybridRetriever combines dense (vector) and sparse (BM25) retrieval.
     It returns a merged, score-fused list of relevant documents.
     """
-    def __init__(self, vectorstore: Chroma, documents: List[str], metadatas: List[Dict] = None):
+    def __init__(self, vectorstore: Chroma, documents: List[str], metadatas: List[Dict] = None, bm25_cache_path: str = "bm25_index.pkl"):
         """
         Args:
             vectorstore: A Langchain Chroma vectorstore instance
@@ -35,15 +37,25 @@ class HybridRetriever:
         
         # Initialize BM25 retriever
         try:
-            # Create Document objects for BM25
-            doc_objects = []
-            for i, doc_text in enumerate(documents):
-                metadata = self.metadatas[i] if i < len(self.metadatas) else {}
-                metadata['doc_id'] = i  # Add unique document ID
-                doc_objects.append(Document(page_content=doc_text, metadata=metadata))
-            
-            self.bm25_retriever = BM25Retriever.from_documents(doc_objects)
-            logger.info(f"BM25 retriever initialized with {len(documents)} documents")
+            # Try to load cached BM25 index
+            if os.path.exists(bm25_cache_path):
+                logger.info("Loading cached BM25 index")
+                with open(bm25_cache_path, "rb") as f:
+                    self.bm25_retriever = pickle.load(f)
+            else:
+                # Create and cache it
+                logger.info("Creating new BM25 retriever")
+                doc_objects = []
+                for i, doc_text in enumerate(documents):
+                    metadata = self.metadatas[i] if i < len(self.metadatas) else {}
+                    metadata['doc_id'] = i
+                    doc_objects.append(Document(page_content=doc_text, metadata=metadata))
+                self.bm25_retriever = BM25Retriever.from_documents(doc_objects)
+                
+                logger.info(f"BM25 retriever initialized with {len(documents)} documents")
+                
+                with open(bm25_cache_path, "wb") as f:
+                    pickle.dump(self.bm25_retriever, f)
             
         except Exception as e:
             logger.error(f"Error initializing BM25 retriever: {e}")
@@ -64,11 +76,14 @@ class HybridRetriever:
         """
         logger.info(f"Performing hybrid retrieval for query: '{query}' (k={k})")
         
+        # Only request k + δ
+        delta = int(0.3 * k)
+        
         # Get dense (vector) results
-        dense_results = self._get_dense_results(query, k * 2)  # Get more to allow for fusion
+        dense_results = self._get_dense_results(query, k + delta)  # Get more to allow for fusion
         
         # Get sparse (BM25) results
-        sparse_results = self._get_sparse_results(query, k * 2)  # Get more to allow for fusion
+        sparse_results = self._get_sparse_results(query, k + delta)  # Get more to allow for fusion
         
         # Fuse and rank results
         fused_results = self._fuse_results(dense_results, sparse_results, dense_weight, sparse_weight)
@@ -98,6 +113,17 @@ class HybridRetriever:
                 })
             
             logger.info(f"Retrieved {len(dense_results)} dense results")
+            
+            # Log detailed dense results for debugging
+            logger.info("DENSE RETRIEVAL RESULTS (SHOW TOP 3):")
+            for i, result in enumerate(dense_results[:3], 1):  # Show top 3
+                doc = result['document']
+                score = result['score']
+                source_name = doc.metadata.get('source_name', 'Unknown')
+                content_preview = doc.page_content[:100] + "..." if len(doc.page_content) > 100 else doc.page_content
+                logger.info(f"  {i}. [Score: {score:.4f}] {source_name}")
+                logger.info(f"     Content: {content_preview}")
+            
             return dense_results
             
         except Exception as e:
@@ -127,6 +153,17 @@ class HybridRetriever:
                 })
             
             logger.info(f"Retrieved {len(sparse_results)} sparse results")
+            
+            # Log detailed sparse results for debugging
+            logger.info("SPARSE RETRIEVAL RESULTS (BM25):")
+            for i, result in enumerate(sparse_results[:3], 1):  # Show top 3
+                doc = result['document']
+                score = result['score']
+                source_name = doc.metadata.get('source_name', 'Unknown')
+                content_preview = doc.page_content[:100] + "..." if len(doc.page_content) > 100 else doc.page_content
+                logger.info(f"  {i}. [Rank Score: {score:.4f}] {source_name}")
+                logger.info(f"     Content: {content_preview}")
+            
             return sparse_results
             
         except Exception as e:
@@ -216,6 +253,19 @@ class HybridRetriever:
         fused_documents = [doc for doc, score in final_results]
         
         logger.info(f"Fused {len(fused_documents)} unique documents")
+        
+        # Log detailed fusion results for debugging
+        logger.info("FINAL FUSED RESULTS:")
+        for i, (doc, score) in enumerate(final_results[:3], 1):  # Show top 3
+            source_name = doc.metadata.get('source_name', 'Unknown')
+            dense_score = doc.metadata.get('dense_score', 0)
+            sparse_score = doc.metadata.get('sparse_score', 0)
+            confidence = doc.metadata.get('confidence', 'unknown')
+            content_preview = doc.page_content[:100] + "..." if len(doc.page_content) > 100 else doc.page_content
+            logger.info(f"  {i}. [Final Score: {score:.4f}, Confidence: {confidence}] {source_name}")
+            logger.info(f"     Dense: {dense_score:.4f}, Sparse: {sparse_score:.4f}")
+            logger.info(f"     Content: {content_preview}")
+        
         return fused_documents
     
     def retrieve_with_sources(self, query: str, k: int = 5, dense_weight: float = 0.5, 
@@ -242,7 +292,7 @@ class HybridRetriever:
         scored_results = []
         
         for doc in documents:
-            # Extract source information
+            # Extract source information with all available metadata
             source_info = {
                 'content': doc.page_content,
                 'source_id': doc.metadata.get('doc_id', 'unknown'),
@@ -250,7 +300,17 @@ class HybridRetriever:
                 'source_name': doc.metadata.get('source_name', 'Unknown Source'),
                 'hybrid_score': doc.metadata.get('hybrid_score', 0),
                 'confidence': doc.metadata.get('confidence', 'unknown'),
-                'retrieval_method': 'hybrid'
+                'retrieval_method': 'hybrid',
+                
+                # Include all original metadata for proper field extraction
+                'patent_id': doc.metadata.get('patent_id', None),
+                'company_name': doc.metadata.get('company_name', None),
+                'company_id': doc.metadata.get('company_id', None),
+                'hojin_id': doc.metadata.get('hojin_id', None),
+                'chunk_index': doc.metadata.get('chunk_index', 0),
+                
+                # Include the full metadata for backup
+                'full_metadata': doc.metadata
             }
             
             sources.append(source_info)
@@ -263,13 +323,12 @@ class HybridRetriever:
         
         return {
             'query': query,
-            'total_results': len(documents),
-            'documents': documents,
+            'k': k,
+            'dense_weight': dense_weight,
+            'sparse_weight': sparse_weight,
             'sources': sources,
-            'scored_results': scored_results,
-            'retrieval_config': {
-                'k': k,
-                'dense_weight': dense_weight,
-                'sparse_weight': sparse_weight
-            }
+            'results': scored_results,
+            'total_retrieved': len(documents)
         } 
+
+        

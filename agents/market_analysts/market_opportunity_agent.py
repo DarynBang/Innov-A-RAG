@@ -26,8 +26,6 @@ class MarketOpportunityAgent(BaseAgent):
         self.llm_type = qa_model
         self.llm = self._initialize_llm()
         
-        # Initialize tools dictionary for future extensibility
-        self.tools = {}
         logger.info("MarketOpportunityAgent initialization completed")
     
     def _initialize_llm(self):
@@ -54,11 +52,6 @@ class MarketOpportunityAgent(BaseAgent):
         except Exception as e:
             logger.error(f"Failed to initialize {self.llm_type} LLM: {str(e)}")
             raise
-
-    def register_tools(self, tools: dict):
-        """Register tools for potential future use."""
-        self.tools.update(tools)
-        logger.info(f"Registered {len(tools)} tools: {list(tools.keys())}")
 
     def run(self, input_data: dict) -> str:
         """
@@ -128,7 +121,7 @@ class MarketOpportunityAgent(BaseAgent):
         if "synthesis_result" in input_data:
             context_parts.append(f"Synthesis Result:\n{input_data['synthesis_result']}")
         
-        # Check for generalize agent output (legacy)
+        # Check for generalize agent output
         if "GeneralizeAgent" in input_data:
             context_parts.append(f"Summary:\n{input_data['GeneralizeAgent']}")
         
@@ -137,7 +130,8 @@ class MarketOpportunityAgent(BaseAgent):
             contexts = input_data["contexts"]
             if contexts:
                 context_parts.append("Retrieved Contexts:")
-                for i, ctx in enumerate(contexts[:3], 1):  # Limit to first 3 contexts
+                # Limit to first 3 contexts
+                for i, ctx in enumerate(contexts[:3], 1):  
                     tool = ctx.get('tool', 'unknown')
                     result = ctx.get('result', '')
                     if isinstance(result, dict):

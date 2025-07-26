@@ -10,6 +10,14 @@ from patent_rag import PatentRAG
 from firm_summary_rag import FirmSummaryRAG
 from config.agent_config import agent_config
 from config.rag_config import patent_config, firm_config
+from tools.company_tools import init_company_tools
+from tools.patent_tools import init_patent_tools
+from tools.hybrid_rag_tools import hybrid_rag_retrieval_tool_wrapper
+from tools.enhanced_hybrid_rag_tools import (
+    enhanced_hybrid_rag_retrieval_tool,
+    company_data_with_mapping_tool,
+    mapping_key_search_tool
+)
 import os
 import gc
 import warnings
@@ -25,7 +33,7 @@ warnings.filterwarnings("ignore")
 class InnovARAG_Pipeline:
     def __init__(self, index_dir, patent_config, firm_config, agent_config, ingest_only=False):
         """
-        Initialize the InnovARAG_Pipeline.
+        Initialize the InnovARAG_Pipeline with enhanced multi-agent capabilities.
         """
         # Initialize RAG indexer and multi-agent QA system
         os.makedirs(index_dir, exist_ok=True)
@@ -44,20 +52,24 @@ class InnovARAG_Pipeline:
                                        index_dir=index_dir,
                                        config=firm_config)
 
-        if ingest_only is False:
-            # one global qa_model for all agents (you could customize per‐agent too)
-            qa_generalize = agent_config.get("qa_generalize", "openai")
-            qa_market_opportunity = agent_config.get("qa_market_opportunity", "openai")
-            qa_market_risk = agent_config.get("qa_market_risk", "openai")
-            qa_market_manager = agent_config.get("qa_market_manager", 'openai')
-
+        if not ingest_only:
+            # Initialize enhanced multi-agent runner
             self.multi_agent = MultiAgentRunner()
-
-            self.multi_agent.register_agent("GeneralizeAgent", qa_model=qa_generalize)
-
-            self.multi_agent.register_agent("MarketOpportunityAgent", qa_model=qa_market_opportunity)
-            self.multi_agent.register_agent("MarketRiskAgent", qa_model=qa_market_risk)
-            self.multi_agent.register_agent("MarketManagerAgent", qa_model=qa_market_manager)
+            
+            # Initialize and register tools
+            company_tools = init_company_tools(firm_df, index_dir)
+            patent_tools = init_patent_tools(patent_df, index_dir)
+            
+            all_tools = {**company_tools, **patent_tools}
+            all_tools['hybrid_rag_retrieval'] = hybrid_rag_retrieval_tool_wrapper
+            
+            # Add enhanced hybrid tools
+            all_tools['enhanced_hybrid_rag_retrieval'] = enhanced_hybrid_rag_retrieval_tool
+            all_tools['company_data_with_mapping'] = company_data_with_mapping_tool
+            all_tools['mapping_key_search'] = mapping_key_search_tool
+            
+            self.multi_agent.register_tools(all_tools)
+            logger.info("Enhanced multi-agent system initialized with tools")
 
     def ingest_patent(self, force_reindex=False) -> None:
         self.patent_rag.ingest_all(force_reindex=force_reindex)
@@ -92,33 +104,49 @@ class InnovARAG_Pipeline:
 
 
     def process_query(self, question: str, patent_abstract: str = None):
-        with torch.inference_mode():
-            patent_results = self.patent_rag.retrieve_patent_contexts(question, top_k=3)
-            firm_summary_results = self.firm_rag.retrieve_firm_contexts(question, top_k=3)
-
+        """
+        Process a query using the enhanced multi-agent workflow.
+        
+        Args:
+            question: User query
+            patent_abstract: Optional patent abstract (legacy parameter)
+            
+        Returns:
+            Enhanced workflow results
+        """
+        logger.info(f"Processing query with enhanced workflow: {question}")
+        
+        if not self.multi_agent:
+            logger.error("Multi-agent system not initialized. Set ingest_only=False during initialization.")
+            return None
+        
         try:
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            gc.collect()
-            logger.info("Freed space from patent and firm Retriever")
-
+            # Use the enhanced workflow
+            results = self.multi_agent.run_enhanced_workflow(question)
+            
+            # Clean up GPU memory if available
+            try:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
+                logger.info("Freed GPU memory after processing")
+            except Exception as e:
+                logger.error(f"Error freeing memory: {e}")
+            
+            return results
+            
         except Exception as e:
-            logger.error(f"Error freeing space for Retriever due to {e}")
-
-        # Pass context + question into the multi-agent system
-        self.multi_agent.run({"question": question,
-                            "patent_abstract": patent_abstract},
-                            patent_contexts=patent_results,
-                            firm_summary_contexts=firm_summary_results)
+            logger.error(f"Error processing query: {e}")
+            return None
 
 def main():
     # Initialize pipeline with configs
 
     # Consistent index folder under PDF dir
     index_dir = r"RAG_INDEX"
-    query = r"Machine Learning and Computer Vision"
-    patent_abstract = """"""
-
+    query = r"What are the market opportunities for AI companies in healthcare?"
+    
+    logger.info("Initializing InnovARAG Pipeline...")
     pipeline = InnovARAG_Pipeline(
         index_dir=index_dir,
         agent_config=agent_config,
@@ -128,6 +156,7 @@ def main():
     )
 
     # Run ingestion
+    logger.info("Running data ingestion...")
     pipeline.ingest_firm(False)
     pipeline.ingest_patent(False)
 
@@ -144,7 +173,15 @@ def main():
     #     company_keywords="robotics|ai",
     #     summary_text="Acme develops advanced robots...")
 
-    pipeline.process_query(query)
+    logger.info("Processing query with enhanced multi-agent workflow...")
+    results = pipeline.process_query(query)
+    
+    if results:
+        logger.info("Query processing completed successfully!")
+        logger.info(f"Analysis team used: {results.get('metadata', {}).get('analysis_team_used', 'Unknown')}")
+        logger.info(f"Total contexts retrieved: {results.get('total_contexts', 0)}")
+    else:
+        logger.error("Query processing failed")
 
 
 if __name__ == '__main__':

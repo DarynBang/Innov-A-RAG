@@ -6,6 +6,7 @@ test/chroma_patent/
 myenv/
 .env
 RAG_INDEX/
+cache/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

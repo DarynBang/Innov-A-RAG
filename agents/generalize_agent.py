@@ -70,7 +70,8 @@ class GeneralizeAgent(BaseAgent):
         self, 
         original_query: str, 
         subquestions: List[str], 
-        contexts: List[Dict[str, Any]]
+        contexts: List[Dict[str, Any]],
+        accumulated_context: str = None
     ) -> str:
         """
         Synthesize information from multiple sources to answer user queries comprehensively.
@@ -79,6 +80,7 @@ class GeneralizeAgent(BaseAgent):
             original_query: The original user query
             subquestions: List of subquestions derived from the original query
             contexts: List of context dictionaries with retrieval results
+            accumulated_context: Optional accumulated context from previous subquestions
             
         Returns:
             Comprehensive answer with source attribution
@@ -86,17 +88,37 @@ class GeneralizeAgent(BaseAgent):
         logger.info(f"Synthesizing information for query: {original_query}")
         logger.info(f"Processing {len(subquestions)} subquestions and {len(contexts)} contexts")
         
+        if accumulated_context:
+            logger.info(f"Using accumulated context (length: {len(accumulated_context)}) for enhanced synthesis")
+        
         try:
             # Format contexts for the prompt
             contexts_text = self._format_contexts(contexts)
             subquestions_text = "\n".join([f"{i+1}. {q}" for i, q in enumerate(subquestions)])
             
-            # Create the prompt
-            user_prompt = GENERALIZE_AGENT_USER_PROMPT.format(
+            # Enhanced user prompt with accumulated context
+            base_user_prompt = GENERALIZE_AGENT_USER_PROMPT.format(
                 original_query=original_query,
                 subquestions=subquestions_text,
                 contexts=contexts_text
             )
+            
+            # Add accumulated context if available
+            if accumulated_context and len(subquestions) > 1:
+                enhanced_prompt = f"""
+ACCUMULATED CONTEXT FROM PREVIOUS SUBQUESTIONS:
+{accumulated_context}
+
+CURRENT SYNTHESIS REQUEST:
+{base_user_prompt}
+
+NOTE: Use the accumulated context to ensure continuity and coherence across all subquestions. 
+When referring to "these strategies", "the companies", or similar references, use the information 
+from the accumulated context to provide specific details."""
+                user_prompt = enhanced_prompt
+                logger.info("Enhanced synthesis prompt with accumulated context")
+            else:
+                user_prompt = base_user_prompt
             
             # Prepare messages
             messages = [

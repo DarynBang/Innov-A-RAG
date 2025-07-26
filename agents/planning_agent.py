@@ -3,6 +3,7 @@ Planning Agent for InnovARAG System
 
 This agent is responsible for analyzing user queries and determining whether they need
 to be split into multiple focused subquestions for better processing and analysis.
+It also determines if market analysis team should be involved.
 """
 
 import json
@@ -15,9 +16,9 @@ from langchain_community.llms import Ollama
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from config.prompts import (
+    DEFAULT_MODELS,
     PLANNING_AGENT_SYSTEM_PROMPT,
-    PLANNING_AGENT_USER_PROMPT,
-    DEFAULT_MODELS
+    PLANNING_AGENT_USER_PROMPT
 )
 from utils.logging_utils import get_logger
 
@@ -25,10 +26,10 @@ logger = get_logger(__name__)
 
 class PlanningAgent:
     """
-    Planning Agent that analyzes user queries and breaks them down into subquestions.
+    Planning Agent that analyzes user queries and determines the processing workflow.
     
     This agent determines whether a complex query should be split into multiple
-    focused subquestions for better information retrieval and analysis.
+    focused subquestions and whether market analysis team should be involved.
     """
     
     def __init__(self, llm_type: str = "openai"):
@@ -70,14 +71,14 @@ class PlanningAgent:
     
     def plan_query(self, query: str) -> Dict[str, Any]:
         """
-        Analyze a user query and determine if it needs to be split into subquestions.
+        Analyze a user query and determine the processing workflow.
         
         Args:
             query: The original user query to analyze
             
         Returns:
             Dictionary containing analysis results, whether splitting is needed,
-            and the list of subquestions (or original query if no splitting needed)
+            whether analysis team is needed, and the list of subquestions
         """
         logger.info(f"Planning query analysis for: {query[:100]}...")
         
@@ -109,28 +110,25 @@ class PlanningAgent:
             
             # Log the results
             needs_splitting = planning_result.get('needs_splitting', False)
+            needs_analysis_team = planning_result.get('needs_analysis_team', False)
             num_subquestions = len(planning_result.get('subquestions', []))
             
             logger.info(
                 f"Planning analysis complete. Needs splitting: {needs_splitting}, "
+                f"Needs analysis team: {needs_analysis_team}, "
                 f"Subquestions: {num_subquestions}"
             )
-            
-            if needs_splitting:
-                logger.info("Query will be split into subquestions:")
-                for i, subq in enumerate(planning_result.get('subquestions', []), 1):
-                    logger.info(f"  {i}. {subq}")
-            else:
-                logger.info("Query will be processed as a single question")
             
             return planning_result
             
         except Exception as e:
-            logger.error(f"Error during query planning: {str(e)}")
+            logger.error(f"Error during planning analysis: {str(e)}")
             # Return fallback result
             return {
-                "analysis": f"Error during planning analysis: {str(e)}",
+                "analysis": f"Error during planning: {str(e)}",
                 "needs_splitting": False,
+                "needs_analysis_team": False,
+                "analysis_reasoning": "Error occurred, defaulting to basic processing",
                 "subquestions": [query],
                 "error": str(e)
             }
@@ -161,18 +159,27 @@ class PlanningAgent:
             result = json.loads(cleaned_response)
             
             # Validate required fields
-            required_fields = ['analysis', 'needs_splitting', 'subquestions']
+            required_fields = ['analysis', 'needs_splitting', 'needs_analysis_team', 'analysis_reasoning', 'subquestions']
             for field in required_fields:
                 if field not in result:
-                    raise ValueError(f"Missing required field: {field}")
+                    if field == 'needs_analysis_team':
+                        result[field] = False  # Default to not needing analysis team
+                    elif field == 'analysis_reasoning':
+                        result[field] = "No reasoning provided"
+                    elif field == 'analysis':
+                        result[field] = "Query analyzed"
+                    elif field == 'needs_splitting':
+                        result[field] = False
+                    elif field == 'subquestions':
+                        result[field] = [result.get('query', 'Unknown query')]
             
             # Ensure subquestions is a list
             if not isinstance(result['subquestions'], list):
-                raise ValueError("subquestions must be a list")
+                result['subquestions'] = [str(result['subquestions'])]
             
-            # Ensure needs_splitting is boolean
-            if not isinstance(result['needs_splitting'], bool):
-                result['needs_splitting'] = bool(result['needs_splitting'])
+            # Ensure boolean fields are boolean
+            result['needs_splitting'] = bool(result.get('needs_splitting', False))
+            result['needs_analysis_team'] = bool(result.get('needs_analysis_team', False))
             
             logger.debug("Successfully parsed planning response")
             return result
@@ -184,46 +191,6 @@ class PlanningAgent:
         
         except Exception as e:
             logger.error(f"Error parsing planning response: {e}")
-            raise
-    
-    # This is defined but not used yet
-    def get_subquestions(self, query: str) -> List[str]:
-        """
-        Get the list of subquestions for a given query.
-        
-        This is a convenience method that returns just the subquestions list.
-        
-        Args:
-            query: The original user query
-            
-        Returns:
-            List of subquestions (or single original query if no splitting needed)
-        """
-        try:
-            planning_result = self.plan_query(query)
-            return planning_result.get('subquestions', [query])
-        
-        except Exception as e:
-            logger.error(f"Error getting subquestions: {e}")
-            return [query]  # Return original query as fallback
-    
-    # This is defined but not used yet
-    def should_split_query(self, query: str) -> bool:
-        """
-        Determine if a query should be split into subquestions.
-        
-        Args:
-            query: The original user query
-            
-        Returns:
-            Boolean indicating whether the query should be split
-        """
-        try:
-            planning_result = self.plan_query(query)
-            return planning_result.get('needs_splitting', False)
-        
-        except Exception as e:
-            logger.error(f"Error determining if query should be split: {e}")
-            return False  # Conservative fallback - don't split if unsure 
+            raise 
         
         

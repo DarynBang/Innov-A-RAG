@@ -2,7 +2,8 @@
 EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 patent_config = {
-    "patent_csv": r'data/random100000_us_patents.csv',                  # <- Path to patent csv file
+    # "patent_csv": r'data/random100000_us_patents.csv',                  # <- Path to patent csv file
+    "patent_csv": r'data/us_patent202506.csv',
     "embed_model": EMBED_MODEL,                                         # or 'mpnet', 'bge'
     "top_k": 3,
     "output_subdir": "patent_chunks_index",
@@ -12,7 +13,8 @@ patent_config = {
 }
 
 firm_config = {
-    "firm_csv": r'data/firms_summary.csv',                              # <- Path to firm csv file
+    # "firm_csv": r'data/firms_summary.csv',                              # <- Path to firm csv file
+    "firm_csv": r'data/firms_with_gpt_labels_final.csv',
     "embed_model": EMBED_MODEL,                                         # or 'mpnet', 'bge'
     "top_k": 3,
     "output_subdir": r"firm_summary_index",
