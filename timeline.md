@@ -2,6 +2,9 @@
 
 ## 15:00 
 
+<details>
+<summary><strong>Click to view details</strong></summary>
+
 - Currently, the **retrieval folders** contains just the code that maybe would later used for Hybrid Search. **BUT currently maybe it is not used yet**. 
 
 - We set all the **LLMs with temperature 0.1** currently. If you want the **fixed response** so maybe we should fix this.
@@ -45,16 +48,28 @@
 
 - Later need to change all the **printing stmts** now into the ```logger.info()```
 
+</details>
+
+
+
 ## 17:00
+
+<details>
+<summary><strong>Click to view details</strong></summary>
 
 - The hybrid retrieval is now in used but yeh still need to check 
 - Fix LLM temp to 0 to have fixed response 
 - Now the tools are dynamically added to the prompt, not manually anymore 
 - Need to check the Normalize, Planning and Fact Checking Agent again. 
 
+</details>
+
 --- 
 
 # 20/07/2025
+
+<details>
+<summary><strong>Click to view details</strong></summary>
 
 - `utils/data_mapping.py`: logic works quite nice and might be needed for letting user try this "enchance searching" when on the streamlit application. 
 - `tools/company_tools.py`: this file defines 2 tools which is `exact_company_lookup_tool` and `company_rag_retrieval_tool_wrapper` for retrieving exact company information or company context from RAG.
@@ -98,13 +113,14 @@
   - there should be a feature for searching for companies based on the context query (like we need to have feature for testing the retrieval of the RAG Firm)
   - there should be a feature like above but for RAG Patents 
 
-- 
-
-
+</details>
 
 --- 
 
 # 25/07/2025 
+
+<details>
+<summary><strong>Click to view details</strong></summary>
 
 - `tools/hybrid_rag_tools.py`: this file defines one tools that is `hybrid_rag_retrieval_tool_wrapper` function. The tool is used to retrieve the RAG context from both the firms and the patents. ==> Now this has been removed. 
 - Now, only the normalize agent has the Tools registry 
@@ -112,21 +128,19 @@
 
 - currently, the normalized agent is not good enough, the context does not contain the previous answer yet right, just part of it for example 1024 tokens only, which would ignore those older contexts
 
-```python
-Current question: How do these patents impact the market and competitive landscape in the machine learning industry?' (k=3)
-2025-07-25 16:55:47 INFO retrieval.optimized_hybrid_retriever: Metadata filters applied: 1589888 documents match
-2025-07-25 16:55:47 INFO retrieval.optimized_hybrid_retriever: FAISS search returned 3 results
-2025-07-25 16:55:47 INFO retrieval.optimized_hybrid_retriever: BM25 search returned 3 results
-2025-07-25 16:55:47 INFO retrieval.optimized_hybrid_retriever: FAISS search returned 3 results
-2025-07-25 16:58:04 INFO retrieval.optimized_hybrid_retriever: BM25 search returned 3 results
-2025-07-25 16:58:04 INFO retrieval.optimized_hybrid_retriever: Fusing results with optimized algorithm
-2025-07-25 16:58:04 INFO retrieval.optimized_hybrid_retriever: Optimized fusion completed: 6 unique documents
-2025-07-25 16:58:04 INFO retrieval.optimized_hybrid_retriever: Async hybrid retrieval completed in 137.889s, returning 3 results
-```
-
-==> TIME NEEDED STILL TOO MUCH
-
 - fix the market manager to not only suggest like currently, but also contain the opportunity and risk summary from the 2 oppor and risk agents. 
 - 
+
+</details>
+
+--- 
+
+# 30/07/2025
+
+<details>
+<summary><strong>Click to view details</strong></summary>
+
+
+</details>
 
 

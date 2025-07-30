@@ -4,7 +4,7 @@ Patent-related tools for exact lookup and RAG retrieval.
 from utils.logging_utils import setup_logging, get_logger
 setup_logging()
 
-from patent_rag import PatentRAG
+from utils.patent_rag import PatentRAG
 from config.rag_config import patent_config
 import pandas as pd
 from typing import Dict, List, Any, Optional

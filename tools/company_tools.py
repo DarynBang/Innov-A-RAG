@@ -4,7 +4,7 @@ Company-related tools for exact lookup and RAG retrieval.
 from utils.logging_utils import setup_logging, get_logger
 setup_logging()
 
-from firm_summary_rag import FirmSummaryRAG
+from utils.firm_summary_rag import FirmSummaryRAG
 from config.rag_config import firm_config
 import pandas as pd
 from typing import Dict, List, Any, Optional

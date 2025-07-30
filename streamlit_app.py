@@ -27,8 +27,8 @@ try:
     from agents.multi_agent_runner import MultiAgentRunner
     from config.agent_config import agent_config, DEFAULT_LLM_TYPE
     from config.rag_config import patent_config, firm_config
-    from firm_summary_rag import FirmSummaryRAG
-    from patent_rag import PatentRAG
+    from utils.firm_summary_rag import FirmSummaryRAG
+    from utils.patent_rag import PatentRAG
     from tools.company_tools import init_company_tools
     from tools.patent_tools import init_patent_tools
     # OLD ENHANCED HYBRID TOOLS (commented out for comparison)
