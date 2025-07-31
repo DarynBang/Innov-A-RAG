@@ -11,12 +11,14 @@ from typing import Dict, List, Any
 
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_community.llms import Ollama
+from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from config.prompts import (
     FACT_CHECKING_AGENT_SYSTEM_PROMPT,
     FACT_CHECKING_AGENT_USER_PROMPT,
+    PRODUCT_SUGGESTION_FACT_CHECK_SYSTEM_PROMPT,
+    PRODUCT_SUGGESTION_FACT_CHECK_USER_PROMPT,
     DEFAULT_MODELS,
     CONFIDENCE_THRESHOLDS
 )
@@ -58,9 +60,9 @@ class FactCheckingAgent:
                     model=DEFAULT_MODELS["gemini"],
                     temperature=0
                 )
-            elif self.llm_type == "qwen":
-                return Ollama(
-                    model=DEFAULT_MODELS["qwen"],
+            elif self.llm_type == "ollama":
+                return ChatOllama(
+                    model=DEFAULT_MODELS["ollama"],
                     temperature=0
                 )
             else:
@@ -75,29 +77,34 @@ class FactCheckingAgent:
         query: str, 
         response: str, 
         sources: List[str],
-        contexts: List[Dict[str, Any]] = None
+        contexts: List[Dict[str, Any]] = None,
+        validation_mode: str = "market_analysis",
+        production_mode: bool = False
     ) -> Dict[str, Any]:
         """
-        Validate a market analysis response for accuracy and consistency.
+        Validate a response for accuracy and consistency.
         
         Args:
             query: The original user query
-            response: The market analysis response to validate
+            response: The response to validate
             sources: List of available sources for verification
             contexts: Optional list of actual context data for deep verification
+            validation_mode: "market_analysis" or "product_suggestion"
             
         Returns:
             Dictionary containing validation results, scores, and recommendations
         """
-        logger.info(f"Starting enhanced fact-checking validation for query: {query[:100]}...")
+        logger.info(f"Starting {validation_mode} fact-checking validation for query: {query[:100]}...")
         
         try:
-            # If we have actual contexts, perform enhanced validation
-            if contexts:
-                return self._validate_with_contexts(query, response, sources, contexts)
+            if validation_mode == "product_suggestion":
+                return self.validate_product_suggestions(query, response, sources, contexts, production_mode=production_mode)
             else:
-                # Fallback to basic validation
-                return self._validate_basic(query, response, sources)
+                # Default to market analysis validation
+                if contexts:
+                    return self._validate_with_contexts(query, response, sources, contexts)
+                else:
+                    return self._validate_basic(query, response, sources)
             
         except Exception as e:
             logger.error(f"Error during fact-checking validation: {str(e)}")
@@ -356,6 +363,23 @@ class FactCheckingAgent:
             "error": error_msg
         }
     
+    def _create_production_fallback_result(self, error_msg: str) -> Dict[str, Any]:
+        """Create fallback validation result for production mode on error."""
+        return {
+            "overall_score": 5.0,
+            "confidence_level": "low",
+            "production_criteria": {
+                "robustness": {"score": 5, "issues": [f"Validation error: {error_msg}"]},
+                "standardization": {"score": 5, "issues": ["Unable to assess"]},
+                "detail_level": {"score": 5, "issues": ["Unable to assess"]},
+                "citation_quality": {"score": 5, "issues": ["Unable to assess"]}
+            },
+            "flagged_issues": [f"Validation error: {error_msg}"],
+            "recommendations": ["Manual review recommended due to validation error"],
+            "validation_mode": "production",
+            "error": error_msg
+        }
+    
     def _parse_validation_response(self, response: str) -> Dict[str, Any]:
         """
         Parse the JSON response from the fact-checking agent.
@@ -413,6 +437,79 @@ class FactCheckingAgent:
         
         except Exception as e:
             logger.error(f"Error parsing fact-checking response: {e}")
+            raise
+    
+    def _parse_production_validation_response(self, response: str) -> Dict[str, Any]:
+        """
+        Parse the JSON response from the production mode fact-checking validation.
+        Expected format: {overall_score, confidence_level, production_criteria, flagged_issues, recommendations}
+        
+        Args:
+            response: Raw response string from LLM
+            
+        Returns:
+            Parsed validation result dictionary
+        """
+        try:
+            # Clean response - remove markdown code blocks if present
+            cleaned_response = response.strip()
+            if cleaned_response.startswith('```json'):
+                cleaned_response = cleaned_response[7:]
+            if cleaned_response.startswith('```'):
+                cleaned_response = cleaned_response[3:]
+            if cleaned_response.endswith('```'):
+                cleaned_response = cleaned_response[:-3]
+            
+            cleaned_response = cleaned_response.strip()
+            
+            # Parse JSON
+            result = json.loads(cleaned_response)
+            
+            # Validate required fields for production mode
+            required_fields = [
+                'overall_score', 'confidence_level', 'production_criteria',
+                'flagged_issues', 'recommendations'
+            ]
+            for field in required_fields:
+                if field not in result:
+                    logger.warning(f"Missing field in production validation response: {field}")
+            
+            # Ensure overall_score is valid
+            if 'overall_score' in result:
+                try:
+                    result['overall_score'] = max(1, min(10, float(result['overall_score'])))
+                except (ValueError, TypeError):
+                    result['overall_score'] = 5.0
+            else:
+                result['overall_score'] = 5.0
+            
+            # Ensure flagged_issues is a list
+            if 'flagged_issues' not in result or not isinstance(result['flagged_issues'], list):
+                result['flagged_issues'] = []
+            
+            # Ensure recommendations is a list
+            if 'recommendations' not in result or not isinstance(result['recommendations'], list):
+                result['recommendations'] = []
+            
+            # Ensure production_criteria exists and has the expected structure
+            if 'production_criteria' not in result or not isinstance(result['production_criteria'], dict):
+                result['production_criteria'] = {
+                    'robustness': {'score': 5, 'issues': []},
+                    'standardization': {'score': 5, 'issues': []},
+                    'detail_level': {'score': 5, 'issues': []},
+                    'citation_quality': {'score': 5, 'issues': []}
+                }
+            
+            logger.debug("Successfully parsed production validation response")
+            return result
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON response: {e}")
+            logger.error(f"Raw response: {response}")
+            raise ValueError(f"Invalid JSON response from production fact-checking agent: {e}")
+        
+        except Exception as e:
+            logger.error(f"Error parsing production validation response: {e}")
             raise
     
     def _get_confidence_level(self, score: int) -> str:
@@ -535,6 +632,737 @@ class FactCheckingAgent:
                     "confidence_level": "low"
                 }
         
-        return validation_results 
+        return validation_results
     
+    def validate_product_suggestions(
+        self, 
+        query: str, 
+        response: str, 
+        sources: List[str],
+        contexts: List[Dict[str, Any]] = None,
+        production_mode: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Validate product suggestions for accuracy and proper citation.
+        
+        Args:
+            query: The original user query
+            response: The product suggestions response to validate
+            sources: List of available sources for verification
+            contexts: Optional list of actual context data for verification
+            
+        Returns:
+            Dictionary containing validation results specific to product suggestions
+        """
+        logger.info(f"Starting product suggestion validation for query: {query[:100]}...")
+        
+        try:
+            if production_mode:
+                return self._validate_production_mode(query, response, sources, contexts)
+            else:
+                # Enhanced validation with contexts if available
+                if contexts:
+                    return self._validate_product_suggestions_with_contexts(query, response, sources, contexts)
+                else:
+                    return self._validate_product_suggestions_basic(query, response, sources)
+            
+        except Exception as e:
+            logger.error(f"Error during product suggestion validation: {str(e)}")
+            if production_mode:
+                return self._create_production_fallback_result(str(e))
+            else:
+                return self._create_fallback_result(str(e))
+    
+    def _validate_production_mode(
+        self, 
+        query: str, 
+        response: str, 
+        sources: List[str],
+        contexts: List[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Production mode validation: Check if answers are robust, standard, detailed and properly cited.
+        
+        Args:
+            query: Original user query
+            response: Product suggestions response to validate
+            sources: Source names/references
+            contexts: Actual context data from tools
+            
+        Returns:
+            Production mode validation results focusing on robustness, standardization, detail, and citations
+        """
+        logger.info("Performing production mode validation focusing on robustness, standardization, detail, and citations")
+        
+        try:
+            # Production mode validation criteria
+            validation_criteria = {
+                'robustness': self._check_robustness(response),
+                'standardization': self._check_standardization(response),
+                'detail_level': self._check_detail_level(response),
+                'citation_quality': self._check_citation_quality(response, sources, contexts)
+            }
+            
+            # Calculate overall score based on production criteria
+            scores = [criteria['score'] for criteria in validation_criteria.values()]
+            overall_score = sum(scores) / len(scores) if scores else 0
+            
+            # Collect all issues
+            flagged_issues = []
+            for criterion, result in validation_criteria.items():
+                flagged_issues.extend(result.get('issues', []))
+            
+            # Use the proper production fact-checking prompt
+            try:
+                from config.prompts import PRODUCTION_FACT_CHECK_PROMPT
+                
+                # Format sources for validation
+                sources_text = "\n".join(sources) if sources else "No sources provided"
+                
+                messages = [
+                    SystemMessage(content="You are a validation specialist for production mode."),
+                    HumanMessage(content=PRODUCTION_FACT_CHECK_PROMPT.format(
+                        query=query,
+                        response=response,
+                        sources=sources_text
+                    ))
+                ]
+            except ImportError:
+                # Fallback to custom prompt if import fails
+                production_prompt = f"""
+You are validating a product suggestion response in PRODUCTION MODE. Focus on these critical criteria:
+
+1. ROBUSTNESS: Is the response well-structured and comprehensive?
+2. STANDARDIZATION: Does it follow a consistent, professional format?
+3. DETAIL: Are the suggestions sufficiently detailed and informative?
+4. CITATIONS: Are sources properly cited and verifiable?
+
+Query: {query}
+
+Response to validate:
+{response}
+
+Available sources: {sources}
+
+Provide a JSON validation result focusing on production readiness.
+                """
+                
+                messages = [
+                    SystemMessage(content="You are a production-ready response validator focusing on robustness, standardization, detail level, and proper citations."),
+                    HumanMessage(content=production_prompt)
+                ]
+            
+            logger.debug(f"Sending production mode validation request to {self.llm_type} LLM")
+            
+            llm_response = self.llm.invoke(messages)
+            content = llm_response.content if hasattr(llm_response, 'content') else str(llm_response)
+            
+            # Parse LLM validation result
+            llm_validation = self._parse_production_validation_response(content)
+            
+            # Combine automated checks with LLM validation
+            final_result = {
+                'overall_score': min(overall_score, llm_validation.get('overall_score', 10)),
+                'confidence_level': self._get_confidence_level(overall_score),
+                'flagged_issues': flagged_issues + llm_validation.get('flagged_issues', []),
+                'recommendations': llm_validation.get('recommendations', []),
+                'production_criteria': validation_criteria,
+                'validation_mode': 'production',
+                'source_verification': {
+                    'available_sources': len(sources),
+                    'contexts_analyzed': len(contexts) if contexts else 0
+                }
+            }
+            
+            logger.info(f"Production mode validation complete. Score: {final_result['overall_score']:.1f}/10, Issues: {len(final_result['flagged_issues'])}")
+            
+            return final_result
+            
+        except Exception as e:
+            logger.error(f"Error in production mode validation: {str(e)}")
+            return self._create_production_fallback_result(str(e))
+    
+    def _check_robustness(self, response: str) -> Dict[str, Any]:
+        """
+        Check if the response is robust and well-structured.
+        
+        Args:
+            response: Response to check
+            
+        Returns:
+            Dictionary with robustness score and issues
+        """
+        issues = []
+        score = 10
+        
+        # Check response length (should be substantial)
+        if len(response) < 100:
+            issues.append("Response too short - lacks robustness")
+            score -= 3
+        
+        # Check for structured format (looking for product suggestions format)
+        if not any(pattern in response.lower() for pattern in ['product', 'suggestion', 'technology', 'innovation']):
+            issues.append("Response lacks clear product/technology focus")
+            score -= 2
+        
+        # Check for logical structure
+        if response.count('.') < 3:  # Very basic check for sentence structure
+            issues.append("Response lacks detailed structure")
+            score -= 2
+        
+        return {'score': max(0, score), 'issues': issues}
+    
+    def _check_standardization(self, response: str) -> Dict[str, Any]:
+        """
+        Check if the response follows a standard format.
+        
+        Args:
+            response: Response to check
+            
+        Returns:
+            Dictionary with standardization score and issues
+        """
+        issues = []
+        score = 10
+        
+        # Check for consistent formatting patterns
+        expected_patterns = [':', '(', ')', ';']  # Basic formatting elements
+        pattern_count = sum(1 for pattern in expected_patterns if pattern in response)
+        
+        if pattern_count < 2:
+            issues.append("Response lacks consistent formatting patterns")
+            score -= 3
+        
+        # Check for proper capitalization (basic check)
+        sentences = response.split('.')
+        uncapitalized = sum(1 for sentence in sentences if sentence.strip() and not sentence.strip()[0].isupper())
+        
+        if uncapitalized > len(sentences) * 0.3:  # More than 30% uncapitalized
+            issues.append("Response has inconsistent capitalization")
+            score -= 2
+        
+        return {'score': max(0, score), 'issues': issues}
+    
+    def _check_detail_level(self, response: str) -> Dict[str, Any]:
+        """
+        Check if the response has sufficient detail.
+        
+        Args:
+            response: Response to check
+            
+        Returns:
+            Dictionary with detail level score and issues
+        """
+        issues = []
+        score = 10
+        
+        # Check word count (should be detailed)
+        word_count = len(response.split())
+        if word_count < 50:
+            issues.append("Response lacks sufficient detail (too few words)")
+            score -= 4
+        elif word_count < 100:
+            issues.append("Response could be more detailed")
+            score -= 2
+        
+        # Check for descriptive elements
+        descriptive_words = ['description', 'details', 'features', 'capabilities', 'benefits', 'applications']
+        descriptive_count = sum(1 for word in descriptive_words if word.lower() in response.lower())
+        
+        if descriptive_count == 0:
+            issues.append("Response lacks descriptive details")
+            score -= 3
+        
+        return {'score': max(0, score), 'issues': issues}
+    
+    def _check_citation_quality(self, response: str, sources: List[str], contexts: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Check if the response has proper citations.
+        
+        Args:
+            response: Response to check
+            sources: Available sources
+            contexts: Context data
+            
+        Returns:
+            Dictionary with citation quality score and issues
+        """
+        issues = []
+        score = 10
+        
+        # Check for citation patterns
+        citation_patterns = ['(Source:', '(Company', '(Patent', 'Reason:', 'source:', 'company', 'patent']
+        citation_count = sum(1 for pattern in citation_patterns if pattern.lower() in response.lower())
+        
+        if citation_count == 0:
+            issues.append("Response lacks proper source citations")
+            score -= 5
+        elif citation_count < 2:
+            issues.append("Response has insufficient citations")
+            score -= 2
+        
+        # Check if sources are referenced
+        if sources:
+            referenced_sources = sum(1 for source in sources if source.lower() in response.lower())
+            if referenced_sources == 0:
+                issues.append("Response doesn't reference available sources")
+                score -= 3
+        
+        # Check for explanation patterns (Reason:, because, etc.)
+        explanation_patterns = ['reason:', 'because', 'since', 'due to', 'based on']
+        explanation_count = sum(1 for pattern in explanation_patterns if pattern.lower() in response.lower())
+        
+        if explanation_count == 0:
+            issues.append("Response lacks explanations for suggestions")
+            score -= 2
+        
+        return {'score': max(0, score), 'issues': issues}
+
+    def _validate_product_suggestions_with_contexts(
+        self, 
+        query: str, 
+        response: str, 
+        sources: List[str], 
+        contexts: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Enhanced validation for product suggestions using actual source contexts.
+        
+        Args:
+            query: Original user query
+            response: Product suggestions response to validate
+            sources: Source names/references
+            contexts: Actual context data from tools
+            
+        Returns:
+            Enhanced validation results for product suggestions
+        """
+        logger.info("Performing enhanced product suggestion validation with source verification")
+        
+        # Extract and organize source content
+        source_content = self._extract_source_content(contexts)
+        
+        # Verify product suggestions against sources
+        citation_verification = self._verify_product_citations(response, source_content)
+        
+        # Check for unsupported product claims
+        unsupported_products = self._identify_unsupported_products(response, source_content)
+        
+        # Prepare enhanced prompt with actual source data
+        enhanced_sources_text = self._format_source_content_for_prompt(source_content)
+        
+        # Create the enhanced prompt for product suggestions
+        user_prompt = PRODUCT_SUGGESTION_FACT_CHECK_USER_PROMPT.format(
+            query=query,
+            response=response,
+            sources=enhanced_sources_text
+        )
+        
+        # Add verification details
+        user_prompt += f"\n\nCITATION VERIFICATION ANALYSIS:\n{citation_verification}"
+        
+        if unsupported_products:
+            user_prompt += f"\n\nPOTENTIAL UNSUPPORTED PRODUCTS:\n" + "\n".join([f"- {product}" for product in unsupported_products])
+        
+        # Get LLM validation
+        messages = [
+            SystemMessage(content=PRODUCT_SUGGESTION_FACT_CHECK_SYSTEM_PROMPT),
+            HumanMessage(content=user_prompt)
+        ]
+        
+        logger.debug(f"Sending enhanced product suggestion validation request to {self.llm_type} LLM")
+        
+        llm_response = self.llm.invoke(messages)
+        content = llm_response.content if hasattr(llm_response, 'content') else str(llm_response)
+        
+        # Parse and enhance validation result
+        validation_result = self._parse_product_suggestion_validation_response(content)
+        
+        # Add verification details
+        validation_result['citation_verification'] = {
+            'verified_citations': citation_verification,
+            'unsupported_products': unsupported_products,
+            'source_coverage': len(source_content),
+            'total_contexts': len(contexts)
+        }
+        
+        # Adjust scores based on citation verification
+        if unsupported_products:
+            validation_result['overall_score'] = max(1, validation_result.get('overall_score', 5) - len(unsupported_products))
+            validation_result['flagged_issues'].extend([f"Unsupported product: {product}" for product in unsupported_products])
+        
+        # Add confidence level
+        validation_result['confidence_level'] = self._get_confidence_level(validation_result.get('overall_score', 0))
+        
+        logger.info(f"Enhanced product suggestion validation complete. Score: {validation_result.get('overall_score', 0)}/10, "
+                   f"Unsupported products: {len(unsupported_products)}")
+        
+        return validation_result
+
+    def _validate_product_suggestions_production(self, query: str, response: str, sources: List[str], contexts: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Production mode validation: Check if answer is robust, standard, detailed, and properly cited using COT.
+        
+        Args:
+            query: Original user query
+            response: Generated product suggestions
+            sources: List of source references
+            contexts: Retrieved contexts for validation
+            
+        Returns:
+            Detailed validation results with production criteria as JSON
+        """
+        logger.info("Running production mode validation with COT and JSON output")
+        
+        try:
+            from config.prompts import PRODUCTION_FACT_CHECK_PROMPT
+            
+            # Format sources for validation
+            sources_text = "\n".join(sources) if sources else "No sources provided"
+            
+            messages = [
+                SystemMessage(content="You are a validation specialist for production mode."),
+                HumanMessage(content=PRODUCTION_FACT_CHECK_PROMPT.format(
+                    query=query,
+                    response=response,
+                    sources=sources_text
+                ))
+            ]
+            
+            llm_response = self.llm.invoke(messages)
+            
+            # Parse JSON response
+            
+            try:
+                # Clean the response - remove markdown code blocks if present
+                cleaned_response = llm_response.content.strip()
+                if cleaned_response.startswith('```json'):
+                    cleaned_response = cleaned_response[7:]
+                if cleaned_response.startswith('```'):
+                    cleaned_response = cleaned_response[3:]
+                if cleaned_response.endswith('```'):
+                    cleaned_response = cleaned_response[:-3]
+                
+                cleaned_response = cleaned_response.strip()
+                
+                # Additional cleaning for common LLM issues
+                if cleaned_response == '"overall_score"' or cleaned_response.strip() == '"overall_score"':
+                    # LLM returned exactly just the field name in quotes
+                    logger.warning(f"LLM returned just field name: {cleaned_response}")
+                    return self._validate_production_fallback(query, response, sources, contexts)
+                elif cleaned_response.startswith('"overall_score"') and len(cleaned_response) < 50:
+                    # LLM sometimes returns just the field name without value or incomplete
+                    logger.warning(f"LLM returned incomplete JSON: {cleaned_response}")
+                    return self._validate_production_fallback(query, response, sources, contexts)
+                elif cleaned_response.startswith('"') and cleaned_response.endswith('"') and '"' not in cleaned_response[1:-1]:
+                    # LLM sometimes returns just the field name in quotes
+                    logger.warning(f"LLM returned just field name: {cleaned_response}")
+                    return self._validate_production_fallback(query, response, sources, contexts)
+                else:
+                    result = json.loads(cleaned_response)
+                    logger.info(f"Production validation completed with JSON. Overall score: {result.get('overall_score', 0)}/10")
+                    return result
+                    
+            except json.JSONDecodeError as e:
+                # Log the actual response for debugging
+                logger.warning(f"JSON parsing failed: {e}")
+                logger.warning(f"Raw response: {llm_response.content.strip()}")
+                # Fallback if JSON parsing fails
+                logger.warning("Using fallback validation")
+                return self._validate_production_fallback(query, response, sources, contexts)
+                
+        except Exception as e:
+            logger.error(f"Error in production mode validation: {e}")
+            return {
+                "overall_score": 1.0,
+                "confidence_level": "very_low",
+                "error": str(e),
+                "validation_mode": "production"
+            }
+    
+    def _validate_production_fallback(self, query: str, response: str, sources: List[str], contexts: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Fallback production mode validation without JSON parsing.
+        
+        Args:
+            query: Original user query
+            response: Generated product suggestions
+            sources: List of source references
+            contexts: Retrieved contexts for validation
+            
+        Returns:
+            Detailed validation results with production criteria
+        """
+        logger.info("Running production mode validation fallback")
+        
+        try:
+            # Use production-specific validation criteria
+            validation_criteria = {
+                'robustness': self._check_robustness(response),
+                'standardization': self._check_standardization(response),
+                'detail_level': self._check_detail_level(response),
+                'citation_quality': self._check_citation_quality(response, sources)
+            }
+            
+            # Calculate overall score
+            scores = [criteria['score'] for criteria in validation_criteria.values()]
+            overall_score = sum(scores) / len(scores) if scores else 0
+            
+            # Determine confidence level
+            if overall_score >= 8.5:
+                confidence_level = 'very_high'
+            elif overall_score >= 7.0:
+                confidence_level = 'high'
+            elif overall_score >= 5.0:
+                confidence_level = 'medium'
+            elif overall_score >= 3.0:
+                confidence_level = 'low'
+            else:
+                confidence_level = 'very_low'
+            
+            # Collect flagged issues
+            flagged_issues = []
+            for criterion, result in validation_criteria.items():
+                flagged_issues.extend(result.get('issues', []))
+            
+            # Generate recommendations
+            recommendations = self._generate_production_recommendations(validation_criteria)
+            
+            result = {
+                "overall_score": round(overall_score, 1),
+                "confidence_level": confidence_level,
+                "production_criteria": validation_criteria,
+                "flagged_issues": flagged_issues,
+                "recommendations": recommendations,
+                "validation_mode": "production",
+                "criteria_met": {
+                    "robust": validation_criteria['robustness']['score'] >= 7,
+                    "standard": validation_criteria['standardization']['score'] >= 7,
+                    "detailed": validation_criteria['detail_level']['score'] >= 7,
+                    "cited": validation_criteria['citation_quality']['score'] >= 7
+                }
+            }
+            
+            logger.info(f"Production validation fallback completed. Overall score: {overall_score}/10")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in production mode validation fallback: {e}")
+            return {
+                "overall_score": 1.0,
+                "confidence_level": "very_low",
+                "error": str(e),
+                "validation_mode": "production"
+            }
+
+    def _validate_product_suggestions_basic(self, query: str, response: str, sources: List[str]) -> Dict[str, Any]:
+        """
+        Basic validation for product suggestions without deep source verification.
+        
+        Args:
+            query: Original user query
+            response: Product suggestions response to validate
+            sources: Source names/references
+            
+        Returns:
+            Basic validation results for product suggestions
+        """
+        logger.info("Performing basic product suggestion validation")
+        
+        # Prepare sources string
+        sources_text = "\n".join([f"- {source}" for source in sources])
+        
+        # Create the prompt
+        user_prompt = PRODUCT_SUGGESTION_FACT_CHECK_USER_PROMPT.format(
+            query=query,
+            response=response,
+            sources=sources_text
+        )
+        
+        # Prepare messages
+        messages = [
+            SystemMessage(content=PRODUCT_SUGGESTION_FACT_CHECK_SYSTEM_PROMPT),
+            HumanMessage(content=user_prompt)
+        ]
+        
+        logger.debug(f"Sending basic product suggestion validation request to {self.llm_type} LLM")
+        
+        # Get response from LLM
+        llm_response = self.llm.invoke(messages)
+        content = llm_response.content if hasattr(llm_response, 'content') else str(llm_response)
+        
+        logger.debug(f"Raw product suggestion validation response: {content}")
+        
+        # Parse validation response
+        validation_result = self._parse_product_suggestion_validation_response(content)
+        
+        # Log validation summary
+        overall_score = validation_result.get('overall_score', 0)
+        flagged_issues = validation_result.get('flagged_issues', [])
+        
+        logger.info(f"Basic product suggestion validation complete. Score: {overall_score}/10, Issues: {len(flagged_issues)}")
+        
+        if flagged_issues:
+            logger.warning("Issues identified during product suggestion validation:")
+            for issue in flagged_issues:
+                logger.warning(f"  - {issue}")
+        
+        # Add confidence level based on score
+        validation_result['confidence_level'] = self._get_confidence_level(overall_score)
+        
+        return validation_result
+
+    def _verify_product_citations(self, response: str, source_content: Dict[str, Dict[str, Any]]) -> str:
+        """Verify product citations against source content."""
+        verification_results = []
+        
+        # Look for citation patterns in the response
+        import re
+        citation_pattern = r'\[Context from ([^\]]+)\]'
+        citations = re.findall(citation_pattern, response)
+        
+        # Extract product mentions (simple heuristic)
+        product_pattern = r'\*\*([^*]+)\*\*'
+        products = re.findall(product_pattern, response)
+        
+        for i, citation in enumerate(citations):
+            verification = f"Citation {i+1}: '{citation}' - "
+            
+            # Check if citation corresponds to available sources
+            citation_found = False
+            for source_name, content_info in source_content.items():
+                if citation.lower() in source_name.lower() or source_name.lower() in citation.lower():
+                    verification += f"Verified in {source_name}"
+                    citation_found = True
+                    break
+            
+            if not citation_found:
+                verification += "Source not clearly identified"
+            
+            verification_results.append(verification)
+        
+        # Check if products have citations
+        products_without_citations = []
+        for product in products:
+            # Simple check if product appears near a citation
+            product_index = response.find(product)
+            if product_index != -1:
+                # Look for citations within 200 characters
+                surrounding_text = response[max(0, product_index-100):product_index+100]
+                if not re.search(citation_pattern, surrounding_text):
+                    products_without_citations.append(product)
+        
+        if products_without_citations:
+            verification_results.append(f"Products without clear citations: {', '.join(products_without_citations[:3])}")
+        
+        return "\n".join(verification_results) if verification_results else "No specific citations to verify"
+
+    def _identify_unsupported_products(self, response: str, source_content: Dict[str, Dict[str, Any]]) -> List[str]:
+        """Identify product suggestions that appear unsupported by source content."""
+        import re
+        unsupported = []
+        
+        # Extract product names from response
+        product_pattern = r'\*\*([^*]+)\*\*'
+        products = re.findall(product_pattern, response)
+        
+        for product in products[:5]:  # Limit for performance
+            product_lower = product.lower()
+            
+            # Check if product is mentioned in any source content
+            found_in_sources = False
+            for content_info in source_content.values():
+                content_lower = content_info['content'].lower()
+                
+                # Check for product name or related keywords
+                product_words = set(product_lower.split())
+                content_words = set(content_lower.split())
+                overlap = len(product_words.intersection(content_words))
+                
+                if overlap >= 2:  # Require at least 2 word overlap
+                    found_in_sources = True
+                    break
+                    
+                # Also check for direct substring match
+                if product_lower in content_lower or any(word in content_lower for word in product_words if len(word) > 3):
+                    found_in_sources = True
+                    break
+            
+            if not found_in_sources:
+                unsupported.append(product)
+        
+        return unsupported[:3]  # Limit to first 3 for readability
+
+    def _parse_product_suggestion_validation_response(self, response: str) -> Dict[str, Any]:
+        """
+        Parse the JSON response from the product suggestion fact-checking agent.
+        
+        Args:
+            response: Raw response string from the LLM
+            
+        Returns:
+            Parsed validation result dictionary
+        """
+        try:
+            # Clean the response - remove markdown code blocks if present
+            cleaned_response = response.strip()
+            if cleaned_response.startswith('```json'):
+                cleaned_response = cleaned_response[7:]
+            if cleaned_response.startswith('```'):
+                cleaned_response = cleaned_response[3:]
+            if cleaned_response.endswith('```'):
+                cleaned_response = cleaned_response[:-3]
+            
+            cleaned_response = cleaned_response.strip()
+            
+            # Parse JSON
+            result = json.loads(cleaned_response)
+            
+            # Validate required fields for product suggestions
+            required_fields = [
+                'overall_score', 'validation_results', 'flagged_issues',
+                'recommendations', 'confidence_assessment'
+            ]
+            for field in required_fields:
+                if field not in result:
+                    logger.warning(f"Missing field in product suggestion validation response: {field}")
+            
+            # Ensure overall_score is valid
+            if 'overall_score' in result:
+                try:
+                    result['overall_score'] = max(1, min(10, int(result['overall_score'])))
+                except (ValueError, TypeError):
+                    result['overall_score'] = 5
+            else:
+                result['overall_score'] = 5
+            
+            # Ensure flagged_issues is a list
+            if 'flagged_issues' not in result or not isinstance(result['flagged_issues'], list):
+                result['flagged_issues'] = []
+            
+            logger.debug("Successfully parsed product suggestion validation response")
+            return result
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON response: {e}")
+            logger.error(f"Raw response: {response}")
+            # Fallback for product suggestions
+            return {
+                "overall_score": 5,
+                "validation_results": {
+                    "citation_quality": "Could not parse response",
+                    "data_fidelity": "Could not parse response",
+                    "relevance": "Could not parse response",
+                    "clarity": "Could not parse response",
+                    "accuracy": "Could not parse response"
+                },
+                "flagged_issues": [f"JSON parsing error: {e}"],
+                "recommendations": "Manual review recommended due to parsing error",
+                "confidence_assessment": "Low confidence due to parsing failure"
+            }
+        
+        except Exception as e:
+            logger.error(f"Error parsing product suggestion validation response: {e}")
+            return self._create_fallback_result(str(e))
+
 

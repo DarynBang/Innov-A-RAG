@@ -101,9 +101,25 @@ class MultiAgentRunner:
                 agent.register_tools(tools)
                 logger.debug(f"Registered tools with {agent_name}")
 
-    def run_enhanced_workflow(self, query: str) -> Dict[str, Any]:
+    def run_enhanced_workflow(self, query: str, product_suggestion_mode: bool = False) -> Dict[str, Any]:
         """
         Run the enhanced multi-agent workflow with comprehensive features and conditional analysis team.
+        
+        Args:
+            query: User query to process
+            product_suggestion_mode: If True, run in product suggestion mode (skip opportunity/risk agents)
+            
+        Returns:
+            Dictionary containing all workflow results and metadata
+        """
+        if product_suggestion_mode:
+            return self.run_production_mode_workflow(query)
+        else:
+            return self.run_market_analysis_workflow(query)
+    
+    def run_market_analysis_workflow(self, query: str) -> Dict[str, Any]:
+        """
+        Run the traditional market analysis workflow.
         
         Args:
             query: User query to process
@@ -111,14 +127,14 @@ class MultiAgentRunner:
         Returns:
             Dictionary containing all workflow results and metadata
         """
-        logger.info(f"Starting enhanced multi-agent workflow for query: {query}")
+        logger.info(f"Starting market analysis workflow for query: {query}")
         
         try:
             workflow_start_time = logger.info("Workflow started")
             
             # Step 1: Planning - Analyze query and determine workflow
             logger.info("Step 1: Query Planning and Analysis")
-            planning_result = self.agents['planning'].plan_query(query)
+            planning_result = self.agents['planning'].plan_query(query, product_suggestion_mode=False)
             
             subquestions = planning_result.get('subquestions', [query])
             needs_splitting = planning_result.get('needs_splitting', False)
@@ -133,9 +149,9 @@ class MultiAgentRunner:
             # Step 2: Process each subquestion through normalization and retrieval
             logger.info("Step 2: Processing subquestions through normalization and retrieval")
             
-            all_contexts = [] # This is from the normalized agent
+            all_contexts = []
             normalization_results = []
-            accumulated_context = ""  # Track accumulated context from previous subquestions
+            accumulated_context = ""
             
             for i, subq in enumerate(subquestions):
                 logger.info(f"Processing subquestion {i+1}/{len(subquestions)}: {subq}")
@@ -143,20 +159,15 @@ class MultiAgentRunner:
                 # Create enhanced subquestion with accumulated context for better understanding
                 enhanced_subquestion = subq
                 if i > 0 and accumulated_context:
-                    # Use much larger context window and implement smart truncation
-                    max_context_length = 4096  # Increased from 1024
+                    max_context_length = 4096
                     if len(accumulated_context) > max_context_length:
-                        # Smart truncation: keep most recent information and summary
                         context_lines = accumulated_context.split('\n')
-                        # Keep last 60% of lines for recent context and add summary of older context
                         recent_lines = context_lines[-int(len(context_lines) * 0.6):]
                         recent_context = '\n'.join(recent_lines)
                         
-                        # If still too long, further truncate but preserve structure
                         if len(recent_context) > max_context_length:
                             recent_context = recent_context[-max_context_length:]
                         
-                        # Add summary of what was truncated
                         num_truncated = len(context_lines) - len(recent_lines)
                         truncated_context = f"[Previous {num_truncated} context entries truncated for brevity]\n{recent_context}"
                     else:
@@ -166,8 +177,15 @@ class MultiAgentRunner:
                     logger.info(f"Enhanced subquestion {i+1} with accumulated context (original: {len(accumulated_context)}, used: {len(truncated_context)} chars)")
                 
                 # Normalize and retrieve information for this subquestion
-                norm_result = self.agents['normalize'].normalize_and_retrieve(enhanced_subquestion)
-                normalization_results.append(norm_result)
+                norm_result = self.agents['normalize'].normalize_and_retrieve(enhanced_subquestion, product_suggestion_mode=False)
+                
+                enhanced_norm_result = {
+                    **norm_result,
+                    'original_query': subq,
+                    'enhanced_query': enhanced_subquestion,
+                    'subquestion_index': i + 1
+                }
+                normalization_results.append(enhanced_norm_result)
                 
                 # Extract contexts from this subquestion
                 retrieved_contexts = norm_result.get('retrieved_contexts', [])
@@ -175,11 +193,9 @@ class MultiAgentRunner:
                 
                 # Update accumulated context with key information from this subquestion
                 if retrieved_contexts:
-                    # Extract key information from ALL retrieved contexts
                     subquestion_summary = f"Q{i+1}: {subq}\n"
-                    for j, context in enumerate(retrieved_contexts):  # Use ALL contexts now
+                    for j, context in enumerate(retrieved_contexts):
                         if 'result' in context and isinstance(context['result'], str):
-                            # Include tool name in summary for better context
                             tool_name = context.get('tool', 'unknown_tool')
                             result_preview = context['result'][:1024] + "..." if len(context['result']) > 1024 else context['result']
                             subquestion_summary += f"[{tool_name}]: {result_preview}\n"
@@ -187,19 +203,14 @@ class MultiAgentRunner:
                             tool_name = context.get('tool', 'unknown_tool')
                             subquestion_summary += f"[{tool_name}]: Error - {context['error']}\n"
                     
-                    # Add the new summary to accumulated context
                     new_context = subquestion_summary + "\n"
                     
-                    # Manage total accumulated context length with more generous limits
-                    max_accumulated_length = 8192  # Increased from 2048 for better context preservation
+                    max_accumulated_length = 8192
                     if len(accumulated_context + new_context) > max_accumulated_length:
-                        # Trim older context but keep more recent context
                         context_lines = accumulated_context.split('\n')
-                        # Keep last 30% of lines of old context + all new context
-                        lines_to_keep = max(20, int(len(context_lines) * 0.3))  # Keep at least 20 lines
+                        lines_to_keep = max(20, int(len(context_lines) * 0.3))
                         trimmed_old_context = '\n'.join(context_lines[-lines_to_keep:]) if len(context_lines) > lines_to_keep else accumulated_context
                         
-                        # Add marker to show context was trimmed
                         trimmed_marker = f"[Earlier context trimmed - kept last {lines_to_keep} entries]\n" if len(context_lines) > lines_to_keep else ""
                         accumulated_context = trimmed_marker + trimmed_old_context + new_context
                         logger.info(f"Trimmed accumulated context to prevent token overflow (kept {lines_to_keep} lines)")
@@ -223,7 +234,8 @@ class MultiAgentRunner:
                 original_query=query,
                 subquestions=subquestions,
                 contexts=all_contexts,
-                accumulated_context=accumulated_context if accumulated_context else None  # Pass accumulated context
+                accumulated_context=accumulated_context if accumulated_context else None,
+                product_suggestion_mode=False
             )
             
             logger.info(f"Synthesis complete. Response length: {len(synthesis_result)} characters")
@@ -289,7 +301,7 @@ class MultiAgentRunner:
                 query=query,
                 response=final_analysis,
                 sources=sources,
-                contexts=all_contexts  # Pass actual contexts for enhanced verification
+                contexts=all_contexts
             )
             
             logger.info(f"Fact checking complete. Overall score: {validation_result.get('overall_score', 0)}/10")
@@ -305,7 +317,7 @@ class MultiAgentRunner:
                 "market_analysis": market_analysis,
                 "fact_checking": validation_result,
                 "sources": sources,
-                "context_preservation": workflow_context_summary,  # Add context summary
+                "context_preservation": workflow_context_summary,
                 "metadata": {
                     "llm_type": self.llm_type,
                     "subquestions_count": len(subquestions),
@@ -322,11 +334,11 @@ class MultiAgentRunner:
             # Print summary to screen
             self._print_workflow_summary(workflow_results)
             
-            logger.info("Enhanced workflow completed successfully")
+            logger.info("Market analysis workflow completed successfully")
             return workflow_results
             
         except Exception as e:
-            logger.error(f"Error in enhanced workflow: {e}")
+            logger.error(f"Error in market analysis workflow: {e}")
             return {
                 "query": query,
                 "error": str(e),
@@ -386,19 +398,47 @@ class MultiAgentRunner:
         else:
             logger.info(f"Context Preservation: Not needed (single question)")
         
-        # Synthesis preview
+        # Subquestions details
+        subquestions = results.get('subquestions', [])
+        if subquestions:
+            logger.info(f"\nSubquestions Generated:")
+            for i, sq in enumerate(subquestions, 1):
+                logger.info(f"  {i}. {sq}")
+        
+        # Normalization results details
+        norm_results = results.get('normalization_results', [])
+        if norm_results:
+            logger.info(f"\nNormalization Results:")
+            for i, norm_result in enumerate(norm_results, 1):
+                query = norm_result.get('original_query', 'Unknown')
+                retrieved_contexts = norm_result.get('retrieved_contexts', [])
+                company_count = 0
+                patent_count = 0
+                
+                for context in retrieved_contexts:
+                    if isinstance(context, dict):
+                        tool = context.get('tool', '')
+                        if 'company' in tool.lower():
+                            company_count += 1
+                        elif 'patent' in tool.lower():
+                            patent_count += 1
+                
+                logger.info(f"  {i}. {query}")
+                logger.info(f"     Retrieved: {len(retrieved_contexts)} contexts ({company_count} company, {patent_count} patent)")
+        
+        # Synthesis summary
         synthesis = results.get('synthesis_result', '')
-        logger.info(f"\nSynthesis:")
-        logger.info(synthesis)
+        logger.info(f"\nSynthesis: {len(synthesis)} characters")
         
         # Market analysis summary
         market_analysis = results.get('market_analysis', {})
-        if market_analysis.get('skipped', False):
-            logger.info(f"\nMarket Analysis: Skipped - {market_analysis.get('reason', 'Not needed')}")
-        else:
+        if not market_analysis.get('skipped', False):
+            logger.info(f"\nMarket Analysis: Complete")
             final_analysis = market_analysis.get('final_analysis', '')
-            logger.info(f"\nFinal Market Analysis:")
-            logger.info(final_analysis)
+            logger.info(f"Final Analysis: {len(final_analysis)} characters")
+        else:
+            logger.info(f"\nMarket Analysis: Skipped")
+            logger.info(f"Reason: {market_analysis.get('reason', 'No reason provided')}")
         
         # Fact checking summary
         fact_checking = results.get('fact_checking', {})
@@ -406,18 +446,198 @@ class MultiAgentRunner:
         confidence_level = fact_checking.get('confidence_level', 'unknown')
         flagged_issues = fact_checking.get('flagged_issues', [])
         
-        logger.info(f"\nFact Checking Results:")
-        logger.info(f"  Overall Score: {overall_score}/10 ({confidence_level.upper()} confidence)")
-        logger.info(f"  Issues Flagged: {len(flagged_issues)}")
+        logger.info(f"\nFact Checking Score: {overall_score}/10 ({confidence_level.upper()} confidence)")
+        logger.info(f"Issues Flagged: {len(flagged_issues)}")
         
         if flagged_issues:
-            logger.info("  Issues:")
+            logger.info("Issues:")
             for issue in flagged_issues[:3]:  # Show first 3 issues
-                logger.info(f"    - {issue}")
+                logger.info(f"  - {issue}")
+        
+        # Sources summary
+        sources = results.get('sources', [])
+        logger.info(f"\nSources: {len(sources)} references")
+        
+        # Final metadata
+        logger.info(f"\nWorkflow Metadata:")
+        logger.info(f"  LLM Type: {metadata.get('llm_type', 'unknown')}")
+        logger.info(f"  Analysis Team Used: {metadata.get('analysis_team_used', 'unknown')}")
+        logger.info(f"  Context Preservation: {metadata.get('context_preservation_used', 'unknown')}")
         
         logger.info("\n" + "="*80 + "\n")
+
+    def run_production_mode_workflow(self, query: str) -> Dict[str, Any]:
+        """
+        Run the simplified production mode workflow: normalize -> generalize -> manager -> verifier.
+        
+        This workflow skips the planning agent and uses a direct, simplified flow for production use.
+        
+        Args:
+            query: User query to process
+            
+        Returns:
+            Dictionary containing production workflow results and metadata
+        """
+        logger.info(f"Starting production mode workflow for query: {query}")
+        logger.info("Production workflow: normalize -> generalize -> manager -> verifier")
+        
+        try:
+            workflow_start_time = logger.info("Production mode workflow started")
+            
+            # Step 1: Normalize and retrieve (production mode - single optimized tool)
+            logger.info("Step 1: Production mode normalization and retrieval")
+            norm_result = self.agents['normalize'].normalize_and_retrieve(query, product_suggestion_mode=True)
+            
+            # Extract contexts and count actual chunks
+            all_contexts = norm_result.get('retrieved_contexts', [])
+            total_chunks = norm_result.get('total_contexts', 0)
+            normalization_results = [{
+                **norm_result,
+                'original_query': query,
+                'production_mode': True
+            }]
+            
+            logger.info(f"Production mode normalization complete. Retrieved {total_chunks} total chunks from {len(all_contexts)} tools")
+            
+            # Step 2: Generalize information (production mode - structured dict output)
+            logger.info("Step 2: Production mode information generalization")
+            synthesis_result = self.agents['generalize'].synthesize_information(
+                original_query=query,
+                subquestions=[query],
+                contexts=all_contexts,
+                accumulated_context=None,  # No accumulated context in production mode
+                product_suggestion_mode=True
+            )
+            
+            logger.info(f"Production mode synthesis complete. Result length: {len(synthesis_result)} characters")
+            
+            # Step 3: Product suggestion generation (production mode - based only on given info)
+            logger.info("Step 3: Production mode product suggestion generation")
+            
+            manager_input = {
+                "question": query,
+                "synthesis_result": synthesis_result,
+                "contexts": all_contexts
+            }
+            
+            # Run market manager in production mode
+            product_suggestions = self.agents['market_manager'].run(manager_input, product_suggestion_mode=True)
+            logger.info(f"Production mode product suggestion generation complete")
+            
+            # Step 4: Production mode validation (robust, standard, detailed, cited)
+            logger.info("Step 4: Production mode fact checking and validation")
+            
+            # Extract sources for fact checking
+            sources = self._extract_sources_from_contexts(all_contexts)
+            
+            # Validate with production mode criteria
+            validation_result = self.agents['fact_checker'].validate_response(
+                query=query,
+                response=product_suggestions,
+                sources=sources,
+                contexts=all_contexts,
+                validation_mode="product_suggestion",
+                production_mode=True
+            )
+            
+            logger.info(f"Production mode validation complete. Overall score: {validation_result.get('overall_score', 0)}/10")
+            
+            # Step 5: Compile production mode results
+            workflow_results = {
+                "query": query,
+                "mode": "production",
+                "workflow_type": "simplified_production",
+                "normalization_results": normalization_results,
+                "total_contexts": total_chunks,
+                "synthesis_result": synthesis_result,
+                "product_suggestions": product_suggestions,
+                "fact_checking": validation_result,
+                "sources": sources,
+                "metadata": {
+                    "llm_type": self.llm_type,
+                    "workflow": "production",
+                    "contexts_count": total_chunks,
+                    "confidence_level": validation_result.get('confidence_level', 'unknown'),
+                    "overall_score": validation_result.get('overall_score', 0),
+                    "planning_skipped": True,
+                    "analysis_team_skipped": True,
+                    "simplified_workflow": True,
+                    "workflow_steps": ["normalize", "generalize", "manager", "verifier"]
+                }
+            }
+            
+            # Print summary to screen
+            self._print_production_workflow_summary(workflow_results)
+            
+            logger.info("Production mode workflow completed successfully")
+            return workflow_results
+            
+        except Exception as e:
+            logger.error(f"Error in production mode workflow: {e}")
+            return {
+                "query": query,
+                "error": str(e),
+                "status": "failed",
+                "mode": "production"
+            }
+
+    def _print_production_workflow_summary(self, results: Dict[str, Any]):
+        """
+        Print a summary of the production workflow results.
+        
+        Args:
+            results: Dictionary containing workflow results
+        """
+        logger.info("\n" + "="*60)
+        logger.info("PRODUCTION MODE WORKFLOW SUMMARY")
+        logger.info("="*60)
+        
+        # Query info
+        query = results.get('query', '')
+        logger.info(f"Query: {query}")
+        logger.info(f"Mode: {results.get('mode', 'unknown')}")
+        logger.info(f"Workflow: {results.get('workflow_type', 'unknown')}")
+        
+        # Context summary
+        logger.info(f"Contexts Retrieved: {results.get('total_contexts', 0)}")
+        
+        # Synthesis result summary
+        synthesis = results.get('synthesis_result', '')
+        logger.info(f"Synthesis Result Length: {len(synthesis)} characters")
+        
+        # Product suggestions summary
+        product_suggestions = results.get('product_suggestions', '')
+        if product_suggestions:
+            logger.info(f"Product Suggestions Generated: {len(product_suggestions)} characters")
+        else:
+            logger.warning("No product suggestions generated")
+        
+        # Validation summary
+        fact_checking = results.get('fact_checking', {})
+        overall_score = fact_checking.get('overall_score', 0)
+        confidence_level = fact_checking.get('confidence_level', 'unknown')
+        flagged_issues = fact_checking.get('flagged_issues', [])
+        
+        logger.info(f"Validation Score: {overall_score}/10 ({confidence_level.upper()} confidence)")
+        logger.info(f"Issues Flagged: {len(flagged_issues)}")
+        
+        if flagged_issues:
+            logger.info("Issues:")
+            for issue in flagged_issues[:3]:  # Show first 3 issues
+                logger.info(f"  - {issue}")
+        
+        # Production criteria if available
+        production_criteria = fact_checking.get('production_criteria', {})
+        if production_criteria:
+            logger.info("Production Criteria:")
+            for criterion, result in production_criteria.items():
+                score = result.get('score', 0) if isinstance(result, dict) else 0
+                logger.info(f"  {criterion.capitalize()}: {score}/10")
+        
+        logger.info("\n" + "="*60 + "\n")
 
     # Alias for backward compatibility
     run = run_enhanced_workflow
 
 
+    

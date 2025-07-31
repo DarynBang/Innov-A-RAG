@@ -72,6 +72,11 @@ class FAISSOptimizationConfig:
     # Index building
     force_rebuild_index: bool = False
     batch_size_for_building: int = 1000
+    
+    # Sampling for large datasets (performance optimization)
+    patent_sample_ratio: float = 0.01  # Only index 1% of patents for FAISS (saves ~13.2 hours for 1.6M patents)
+    company_sample_ratio: float = 1.0  # Index all company documents (smaller dataset)
+    large_dataset_threshold: int = 100000  # Apply sampling if dataset > 100k documents
 
 @dataclass
 class ParallelProcessingConfig:

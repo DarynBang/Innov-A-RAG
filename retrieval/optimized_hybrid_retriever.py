@@ -98,7 +98,9 @@ class OptimizedHybridRetriever:
         use_dimensionality_reduction: bool = False,
         reduced_dimensions: int = 128,
         confidence_threshold: float = 0.9,
-        max_workers: int = 4
+        max_workers: int = 4,
+        faiss_sample_ratio: float = 1.0,  # New: Ratio of documents to index for FAISS (1.0 = all, 0.1 = 10%)
+        is_patent_data: bool = False  # New: Flag to identify if this is patent data
     ):
         """
         Initialize OptimizedHybridRetriever with advanced features.
@@ -124,6 +126,8 @@ class OptimizedHybridRetriever:
         self.metadatas = metadatas or [{} for _ in documents]
         self.confidence_threshold = confidence_threshold
         self.max_workers = max_workers
+        self.faiss_sample_ratio = faiss_sample_ratio
+        self.is_patent_data = is_patent_data
         
         # Initialize caching system
         self.cache_config = cache_config or CacheConfig()
@@ -266,13 +270,45 @@ class OptimizedHybridRetriever:
             # embeddings more efficiently from your Chroma vectorstore
             all_embeddings = []
             
-            # Sample approach: get embeddings for all documents
-            for i, doc_text in enumerate(self.documents[:1000]):  # Limit for demo
+            # Determine how many documents to index based on sampling ratio
+            total_docs = len(self.documents)
+            
+            # Apply sampling for large patent datasets
+            if self.is_patent_data and self.faiss_sample_ratio < 1.0:
+                import random
+                random.seed(42)  # Reproducible sampling
+                sample_size = int(total_docs * self.faiss_sample_ratio)
+                sample_indices = sorted(random.sample(range(total_docs), sample_size))
+                documents_to_index = [self.documents[i] for i in sample_indices]
+                metadatas_to_index = [self.metadatas[i] for i in sample_indices]
+                
+                logger.info(f"PATENT DATASET DETECTED - Sampling for FAISS performance:")
+                logger.info(f"   Total patents: {total_docs:,}")
+                logger.info(f"   Sampling ratio: {self.faiss_sample_ratio:.1%}")
+                logger.info(f"   Documents to index: {sample_size:,} ({sample_size/total_docs*100:.1f}%)")
+                logger.info(f"   Estimated time saved: ~{(total_docs-sample_size)*3/100/60:.0f} minutes")
+            else:
+                documents_to_index = self.documents
+                metadatas_to_index = self.metadatas
+                sample_size = total_docs
+                logger.info(f"Building FAISS index for ALL {total_docs:,} documents")
+            
+            # Process in batches to manage memory
+            batch_size = 100
+            for i, doc_text in enumerate(documents_to_index):
                 embedding = self.embeddings.embed_query(doc_text)
                 all_embeddings.append(embedding)
                 
-                if i % 100 == 0:
-                    logger.info(f"Processed {i} documents for FAISS index")
+                # Log progress every 100 documents
+                if (i + 1) % batch_size == 0:
+                    progress_pct = (i + 1) / sample_size * 100
+                    estimated_remaining = ((sample_size - (i + 1)) * 3 / 100) / 60  # Estimate in minutes
+                    logger.info(f"FAISS indexing progress: {i + 1:,}/{sample_size:,} documents ({progress_pct:.1f}%) - Est. {estimated_remaining:.1f}min remaining")
+                
+                # Memory management for large datasets
+                if self.cache_config.memory_optimization and (i + 1) % 1000 == 0:
+                    import gc
+                    gc.collect()
             
             embeddings_array = np.array(all_embeddings, dtype=np.float32)
             
@@ -1144,12 +1180,19 @@ class OptimizedHybridRetriever:
         k: int,
         filtered_indices: Optional[List[int]] = None
     ) -> List[SearchResult]:
-        """Get sparse retrieval results asynchronously."""
+        """Get sparse retrieval results asynchronously with performance optimizations."""
         if not self.bm25_retriever:
             logger.warning("BM25 retriever not available")
             return []
         
         try:
+            # PERFORMANCE FIX: Limit query length to prevent 91s delays
+            MAX_QUERY_LENGTH = 500  # Truncate extremely long queries
+            if len(query) > MAX_QUERY_LENGTH:
+                original_length = len(query)
+                query = query[:MAX_QUERY_LENGTH] + "..."
+                logger.warning(f"Query truncated from {original_length} to {MAX_QUERY_LENGTH} chars to prevent BM25 performance issues")
+            
             # Check for cached BM25 results
             bm25_cache_key = f"bm25:{hashlib.md5(query.encode()).hexdigest()}"
             cached_results = self._get_cache(bm25_cache_key)
@@ -1157,7 +1200,26 @@ class OptimizedHybridRetriever:
             if cached_results:
                 results = cached_results
             else:
-                results = self.bm25_retriever.invoke(query)
+                # PERFORMANCE FIX: Add timeout and monitoring for BM25 search
+                import asyncio
+                import time
+                
+                start_time = time.time()
+                try:
+                    # Set timeout for BM25 search to prevent hanging
+                    results = await asyncio.wait_for(
+                        asyncio.get_event_loop().run_in_executor(
+                            None, self.bm25_retriever.invoke, query
+                        ),
+                        timeout=30.0  # 30 second timeout
+                    )
+                    search_time = time.time() - start_time
+                    if search_time > 5.0:
+                        logger.warning(f"BM25 search took {search_time:.1f}s (>5s threshold) - consider query optimization")
+                except asyncio.TimeoutError:
+                    logger.error(f"BM25 search timed out after 30s for query length {len(query)}")
+                    return []  # Return empty results instead of hanging
+                    
                 self._set_cache(bm25_cache_key, results, ttl=3600)
             
             search_results = []

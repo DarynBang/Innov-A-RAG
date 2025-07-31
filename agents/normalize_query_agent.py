@@ -9,7 +9,7 @@ setup_logging()
 from agents.base import BaseAgent
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_community.llms import Ollama
+from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage
 from config.prompts import (
     DEFAULT_MODELS,
@@ -47,9 +47,9 @@ class NormalizeQueryAgent(BaseAgent):
                     model=DEFAULT_MODELS["gemini"],
                     temperature=0
                 )
-            elif self.llm_type == "qwen":
-                return Ollama(
-                    model=DEFAULT_MODELS["qwen"],
+            elif self.llm_type == "ollama":
+                return ChatOllama(
+                    model=DEFAULT_MODELS["ollama"],
                     temperature=0
                 )
             else:
@@ -65,6 +65,52 @@ class NormalizeQueryAgent(BaseAgent):
         self.available_tools = list(tools.keys()) if tools else []
         
         logger.info(f"Registered {len(self.available_tools)} tools: {self.available_tools}")
+    
+    def run(self, input_data: dict) -> str:
+        """
+        Run the NormalizeQueryAgent with input data and return normalization results.
+        
+        Args:
+            input_data: dict containing:
+                - question: the query to normalize and process
+                - product_suggestion_mode: optional boolean for product suggestion mode
+                
+        Returns:
+            str: JSON string representation of normalization and retrieval results
+        """
+        logger.info("NormalizeQueryAgent.run() called")
+        
+        # Extract query from input data
+        query = input_data.get("question", "")
+        product_suggestion_mode = input_data.get("product_suggestion_mode", False)
+        
+        if not query:
+            logger.warning("No query provided in input_data")
+            return '{"error": "No query provided", "status": "failed"}'
+        
+        logger.info(f"Processing query: {query}")
+        logger.info(f"Product suggestion mode: {product_suggestion_mode}")
+        
+        try:
+            # Call the main normalization and retrieval functionality
+            result = self.normalize_and_retrieve(query, product_suggestion_mode=product_suggestion_mode)
+            
+            # Convert result to JSON string for return
+            import json
+            json_result = json.dumps(result, ensure_ascii=False, indent=2)
+            
+            logger.info("NormalizeQueryAgent.run() completed successfully")
+            return json_result
+            
+        except Exception as e:
+            logger.error(f"Error in NormalizeQueryAgent.run(): {e}")
+            error_result = {
+                "error": str(e),
+                "status": "failed",
+                "query": query
+            }
+            import json
+            return json.dumps(error_result, ensure_ascii=False, indent=2)
     
     def _generate_dynamic_system_prompt(self) -> str:
         """Generate dynamic system prompt with current tool information."""
@@ -165,7 +211,7 @@ class NormalizeQueryAgent(BaseAgent):
                 "error": str(e)
             }
     
-    def normalize_and_retrieve(self, query: str) -> Dict[str, Any]:
+    def normalize_and_retrieve(self, query: str, product_suggestion_mode: bool = False) -> Dict[str, Any]:
         """
         Normalize a query and invoke recommended tools for information retrieval.
         
@@ -175,34 +221,14 @@ class NormalizeQueryAgent(BaseAgent):
         Returns:
             Dictionary containing normalization results and retrieved information
         """
-        logger.info(f"Normalizing and retrieving information for: {query}")
+        mode_desc = "production" if product_suggestion_mode else "development"
+        logger.info(f"Normalizing and retrieving information ({mode_desc} mode) for: {query}")
         
         try:
-            # First normalize the query
-            normalized_result = self.normalize_query(query)
-            
-            # Get recommended tools
-            recommended_tools = normalized_result.get('recommended_tools', [])
-            identifiers = normalized_result.get('identifiers', {})
-            query_type = normalized_result.get('query_type', 'general')
-            
-            # Enhanced tool execution with workflow awareness
-            retrieved_contexts = []
-            if self.tool_executor:
-                retrieved_contexts = self._execute_tools_with_workflow_awareness(
-                    recommended_tools, query, identifiers, query_type
-                )
-            
-            # Combine results
-            result = {
-                "normalization": normalized_result,
-                "retrieved_contexts": retrieved_contexts,
-                "total_contexts": len(retrieved_contexts)
-            }
-            
-            logger.info(f"Retrieved {len(retrieved_contexts)} contexts using {len(recommended_tools)} tools")
-            
-            return result
+            if product_suggestion_mode:
+                return self._normalize_and_retrieve_production(query)
+            else:
+                return self._normalize_and_retrieve_development(query)
             
         except Exception as e:
             logger.error(f"Error during normalize and retrieve: {e}")
@@ -212,6 +238,256 @@ class NormalizeQueryAgent(BaseAgent):
                 "total_contexts": 0,
                 "error": str(e)
             }
+    
+    def _normalize_and_retrieve_production(self, query: str) -> Dict[str, Any]:
+        """
+        Production mode: Only normalize query and use single optimized tool.
+        
+        Args:
+            query: The user's input query
+            
+        Returns:
+            Dictionary containing normalization results and retrieved information
+        """
+        logger.info("Running production mode normalization and retrieval")
+        
+        # Step 1: Normalize query to shorter but meaningful version
+        normalized_query = self._normalize_query_for_production(query)
+        
+        # Step 2: Use only optimized hybrid tool with fixed top-k
+        retrieved_contexts = []
+        if "optimized_hybrid_rag_retrieval" in self.tool_executor:
+            try:
+                logger.info(f"Using optimized hybrid retrieval with top-k=30 for query: {normalized_query}")
+                tool_result = self.tool_executor["optimized_hybrid_rag_retrieval"](
+                    query=normalized_query,
+                    top_k=30,
+                    search_type="both"  # Search both companies and patents
+                )
+                retrieved_contexts.append({
+                    "tool": "optimized_hybrid_rag_retrieval",
+                    "input": normalized_query,
+                    "result": tool_result,
+                    "execution_type": "production"
+                })
+                logger.info("Production mode retrieval completed successfully")
+            except Exception as e:
+                logger.error(f"Error in production mode retrieval: {e}")
+                retrieved_contexts.append({
+                    "tool": "optimized_hybrid_rag_retrieval",
+                    "error": str(e),
+                    "execution_type": "error"
+                })
+        else:
+            logger.warning("Optimized hybrid retrieval tool not available in production mode")
+        
+        # Return simplified result structure for production mode
+        total_chunks = 0
+        for context in retrieved_contexts:
+            if context.get('execution_type') == 'production':
+                result = context.get('result', {})
+                if isinstance(result, dict):
+                    company_contexts = result.get('company_contexts', [])
+                    patent_contexts = result.get('patent_contexts', [])
+                    total_chunks += len(company_contexts) + len(patent_contexts)
+        
+        result = {
+            "normalization": {
+                "original_query": query,
+                "normalized_query": normalized_query,
+                "query_type": "production",
+                "mode": "production"
+            },
+            "retrieved_contexts": retrieved_contexts,
+            "total_contexts": total_chunks  # Now shows actual chunks count
+        }
+        
+        logger.info(f"Production mode retrieved {total_chunks} total chunks from {len(retrieved_contexts)} tools")
+        return result
+    
+    def _normalize_query_for_production(self, query: str) -> str:
+        """
+        Normalize query for production mode: make it shorter but still meaningful.
+        
+        Args:
+            query: Original user query
+            
+        Returns:
+            Shortened but meaningful query
+        """
+        from config.prompts import PRODUCTION_QUERY_NORMALIZATION_PROMPT
+        logger.debug("Successfully imported PRODUCTION_QUERY_NORMALIZATION_PROMPT")
+        
+        try:
+            
+            formatted_prompt = PRODUCTION_QUERY_NORMALIZATION_PROMPT.format(query=query)
+            logger.debug(f"Formatted prompt length: {len(formatted_prompt)}")
+            
+            messages = [
+                SystemMessage(content="You are a query normalization specialist for production mode."),
+                HumanMessage(content=formatted_prompt)
+            ]
+            logger.debug("Messages created successfully")
+            logger.debug(f"Message types: {[type(msg).__name__ for msg in messages]}")
+            
+            try:
+                response = self.llm.invoke(messages)
+                logger.debug("LLM invoke completed successfully")
+            except Exception as llm_error:
+                logger.error(f"LLM invoke failed: {llm_error}")
+                logger.error(f"LLM error type: {type(llm_error).__name__}")
+                raise
+            logger.debug(f"LLM response received: {type(response)}")
+            logger.debug(f"LLM response content: {response.content if hasattr(response, 'content') else 'No content attribute'}")
+            
+            # Check if response.content is the problematic value
+            if hasattr(response, 'content'):
+                logger.debug(f"Raw response content repr: {repr(response.content)}")
+            else:
+                logger.error("Response has no content attribute")
+            
+            # Parse JSON response
+            import json
+            normalized_query = None  # Initialize to avoid NameError
+            try:
+                # Clean the response - remove markdown code blocks if present
+                cleaned_response = response.content.strip()
+                if cleaned_response.startswith('```json'):
+                    cleaned_response = cleaned_response[7:]
+                if cleaned_response.startswith('```'):
+                    cleaned_response = cleaned_response[3:]
+                if cleaned_response.endswith('```'):
+                    cleaned_response = cleaned_response[:-3]
+                
+                cleaned_response = cleaned_response.strip()
+                
+                # Additional cleaning for common LLM issues
+                logger.debug(f"Analyzing cleaned response: {repr(cleaned_response)}")
+                
+                if cleaned_response == '"normalized_query"' or cleaned_response.strip() == '"normalized_query"':
+                    # LLM returned exactly just the field name in quotes
+                    logger.warning(f"BRANCH 1: LLM returned just field name: {cleaned_response}")
+                    normalized_query = query  # Use original query as fallback
+                elif cleaned_response.startswith('"normalized_query"') and len(cleaned_response) < 50:
+                    # LLM sometimes returns just the field name without value or incomplete
+                    logger.warning(f"BRANCH 2: LLM returned incomplete JSON: {cleaned_response}")
+                    normalized_query = query  # Use original query as fallback
+                elif cleaned_response.startswith('"') and cleaned_response.endswith('"') and '"' not in cleaned_response[1:-1]:
+                    # LLM sometimes returns just the field name in quotes
+                    logger.warning(f"BRANCH 3: LLM returned just field name: {cleaned_response}")
+                    normalized_query = query  # Use original query as fallback
+                elif '"normalized_query"' in cleaned_response:
+                    # Try to extract the value from partial JSON
+                    try:
+                        # Find the normalized_query field and extract its value
+                        start_idx = cleaned_response.find('"normalized_query"')
+                        if start_idx != -1:
+                            # Find the colon after the field name
+                            colon_idx = cleaned_response.find(':', start_idx)
+                            if colon_idx != -1:
+                                # Find the opening quote after the colon
+                                quote_start = cleaned_response.find('"', colon_idx)
+                                if quote_start != -1:
+                                    # Find the closing quote
+                                    quote_end = cleaned_response.find('"', quote_start + 1)
+                                    if quote_end != -1:
+                                        extracted_value = cleaned_response[quote_start + 1:quote_end]
+                                        if extracted_value.strip():
+                                            logger.info(f"Extracted normalized query from partial JSON: {extracted_value}")
+                                            normalized_query = extracted_value
+                                        else:
+                                            normalized_query = query
+                                    else:
+                                        normalized_query = query
+                                else:
+                                    normalized_query = query
+                            else:
+                                normalized_query = query
+                        else:
+                            normalized_query = query
+                    except Exception as e:
+                        logger.warning(f"Failed to extract from partial JSON: {e}")
+                        normalized_query = query
+                else:
+                    logger.debug(f"BRANCH 4: Attempting JSON parsing of: {repr(cleaned_response)}")
+                    result = json.loads(cleaned_response)
+                    normalized_query = result.get('normalized_query', query)
+                    logger.debug(f"JSON parsing successful, normalized_query: {normalized_query}")
+            except json.JSONDecodeError as e:
+                # Log the actual response for debugging
+                logger.warning(f"JSON parsing failed: {e}")
+                logger.warning(f"Raw response: {response.content.strip()}")
+                # Fallback if JSON parsing fails
+                normalized_query = query  # Use original query instead of raw response
+            
+            # Ensure normalized_query is always set
+            if normalized_query is None:
+                logger.warning("normalized_query was never assigned, using original query")
+                normalized_query = query
+            
+            # Fallback: if normalization failed or is too similar, use simple approach
+            if not normalized_query or len(normalized_query) > len(query) * 0.8:
+                # Simple fallback: remove common stop phrases
+                stop_phrases = [
+                    "tell me about", "i want to know", "please", "could you", "can you",
+                    "what are", "what is", "how does", "how do", "explain", "describe"
+                ]
+                normalized_query = query.lower()
+                for phrase in stop_phrases:
+                    normalized_query = normalized_query.replace(phrase, "")
+                normalized_query = " ".join(normalized_query.split())  # Clean up spaces
+                
+                if not normalized_query:
+                    normalized_query = query  # Ultimate fallback
+            
+            logger.info(f"Query normalized: '{query}' -> '{normalized_query}'")
+            return normalized_query
+            
+        except Exception as e:
+            logger.warning(f"Error normalizing query, using original: {e}")
+            logger.warning(f"Exception type: {type(e).__name__}")
+            logger.warning(f"Exception details: {str(e)}")
+            logger.warning(f"Exception repr: {repr(e)}")
+            import traceback
+            logger.warning(f"Full traceback: {traceback.format_exc()}")
+            return query
+    
+    def _normalize_and_retrieve_development(self, query: str) -> Dict[str, Any]:
+        """
+        Development mode: Full normalization and tool selection (original behavior).
+        
+        Args:
+            query: The user's input query
+            
+        Returns:
+            Dictionary containing normalization results and retrieved information
+        """
+        logger.info("Running development mode normalization and retrieval")
+        
+        # First normalize the query
+        normalized_result = self.normalize_query(query)
+        
+        # Get recommended tools
+        recommended_tools = normalized_result.get('recommended_tools', [])
+        identifiers = normalized_result.get('identifiers', {})
+        query_type = normalized_result.get('query_type', 'general')
+        
+        # Enhanced tool execution with workflow awareness
+        retrieved_contexts = []
+        if self.tool_executor:
+            retrieved_contexts = self._execute_tools_with_workflow_awareness(
+                recommended_tools, query, identifiers, query_type
+            )
+        
+        # Combine results
+        result = {
+            "normalization": normalized_result,
+            "retrieved_contexts": retrieved_contexts,
+            "total_contexts": len(retrieved_contexts)
+        }
+        
+        logger.info(f"Development mode retrieved {len(retrieved_contexts)} contexts using {len(recommended_tools)} tools")
+        return result
 
     def _execute_tools_with_workflow_awareness(self, recommended_tools: List[str], query: str, 
                                              identifiers: Dict[str, List[str]], query_type: str) -> List[Dict[str, Any]]:
@@ -316,52 +592,6 @@ class NormalizeQueryAgent(BaseAgent):
         
         return retrieved_contexts
 
-    # This is defined but not used yet
-    def run(self, input_data: dict) -> dict:
-        """
-        Normalize and classify the user query (maintaining backward compatibility).
-        
-        Args:
-            input_data: dict containing "question" key
-            
-        Returns:
-            dict: Classification results with category, identifiers, and normalized query
-        """
-        query = input_data.get("question", "")
-        logger.info(f"Normalizing query: {query}")
-        
-        if not query:
-            logger.warning("Empty query received")
-            return {
-                "category": "general",
-                "company_names": [],
-                "patent_ids": [],
-                "keywords": [],
-                "normalized_query": ""
-            }
-        
-        try:
-            # Use new normalization method
-            normalized_result = self.normalize_query(query)
-            
-            # Convert to format for backward compatibility
-            result = {
-                "category": normalized_result.get("query_type", "general"),
-                "company_names": normalized_result.get("identifiers", {}).get("companies", []),
-                "patent_ids": normalized_result.get("identifiers", {}).get("patents", []),
-                "keywords": [],  # Can be extracted from reasoning if needed
-                "normalized_query": query,
-                "recommended_tools": normalized_result.get("recommended_tools", []),
-                "reasoning": normalized_result.get("reasoning", "")
-            }
-            
-            logger.info(f"Query classified as: {result.get('category', 'unknown')}")
-            return result
-                
-        except Exception as e:
-            logger.error(f"Error in query normalization: {e}")
-            return self._simple_classify(query)
-    
     def _prepare_tool_input(self, tool_name: str, query: str, identifiers: Dict[str, List[str]]) -> str:
         """
         Prepare appropriate input for different tools based on the tool type and query.
@@ -482,7 +712,7 @@ class NormalizeQueryAgent(BaseAgent):
         
         # Return original result if no heuristics apply
         return normalized_result
-    
+
     def _parse_normalization_response(self, response: str) -> Dict[str, Any]:
         """
         Parse the JSON response from the normalization agent.
@@ -550,34 +780,6 @@ class NormalizeQueryAgent(BaseAgent):
                 "reasoning": f"Parsing error: {str(e)}"
             }
 
-    def _simple_classify(self, query: str) -> Dict[str, Any]:
-        """
-        Simple rule-based classification as fallback.
-        
-        Args:
-            query: User query
-            
-        Returns:
-            Basic classification result
-        """
-        query_lower = query.lower()
-        
-        # Simple keyword-based classification
-        if any(word in query_lower for word in ['company', 'firm', 'business', 'corporation']):
-            category = 'company'
-        elif any(word in query_lower for word in ['patent', 'invention', 'ip', 'intellectual property']):
-            category = 'patent'
-        else:
-            category = 'general'
-        
-        return {
-            "category": category,
-            "company_names": [],
-            "patent_ids": [],
-            "keywords": query.split(),
-            "normalized_query": query,
-            "recommended_tools": ["enhanced_hybrid_rag_retrieval"],
-            "reasoning": "Fallback classification due to error"
-        } 
+ 
         
         

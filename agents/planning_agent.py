@@ -12,13 +12,15 @@ from typing import Dict, List, Any
 
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_community.llms import Ollama
+from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from config.prompts import (
     DEFAULT_MODELS,
     PLANNING_AGENT_SYSTEM_PROMPT,
-    PLANNING_AGENT_USER_PROMPT
+    PLANNING_AGENT_USER_PROMPT,
+    PRODUCT_SUGGESTION_PLANNING_SYSTEM_PROMPT,
+    PRODUCT_SUGGESTION_PLANNING_USER_PROMPT
 )
 from utils.logging_utils import get_logger
 
@@ -57,9 +59,9 @@ class PlanningAgent:
                     model=DEFAULT_MODELS["gemini"],
                     temperature=0
                 )
-            elif self.llm_type == "qwen":
-                return Ollama(
-                    model=DEFAULT_MODELS["qwen"],
+            elif self.llm_type == "ollama":
+                return ChatOllama(
+                    model=DEFAULT_MODELS["ollama"],
                     temperature=0
                 )
             else:
@@ -69,26 +71,35 @@ class PlanningAgent:
             logger.error(f"Failed to initialize {self.llm_type} LLM: {str(e)}")
             raise
     
-    def plan_query(self, query: str) -> Dict[str, Any]:
+    def plan_query(self, query: str, product_suggestion_mode: bool = False) -> Dict[str, Any]:
         """
         Analyze a user query and determine the processing workflow.
         
         Args:
             query: The original user query to analyze
+            product_suggestion_mode: If True, use product-focused planning strategy
             
         Returns:
             Dictionary containing analysis results, whether splitting is needed,
             whether analysis team is needed, and the list of subquestions
         """
-        logger.info(f"Planning query analysis for: {query[:100]}...")
+        mode_desc = "product suggestion" if product_suggestion_mode else "market analysis"
+        logger.info(f"Planning query analysis for {mode_desc} mode: {query[:100]}...")
         
         try:
-            # Create the prompt
-            user_prompt = PLANNING_AGENT_USER_PROMPT.format(query=query)
+            # PLANNING STRATEGY FIX: Use different prompts based on mode
+            if product_suggestion_mode:
+                system_prompt = PRODUCT_SUGGESTION_PLANNING_SYSTEM_PROMPT
+                user_prompt = PRODUCT_SUGGESTION_PLANNING_USER_PROMPT.format(query=query)
+                logger.info("Using product-focused planning strategy")
+            else:
+                system_prompt = PLANNING_AGENT_SYSTEM_PROMPT
+                user_prompt = PLANNING_AGENT_USER_PROMPT.format(query=query)
+                logger.info("Using market analysis planning strategy")
             
             # Prepare messages
             messages = [
-                SystemMessage(content=PLANNING_AGENT_SYSTEM_PROMPT),
+                SystemMessage(content=system_prompt),
                 HumanMessage(content=user_prompt)
             ]
             

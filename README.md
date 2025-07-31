@@ -4,33 +4,50 @@ An advanced AI-powered platform that combines Retrieval-Augmented Generation (RA
 
 ## 🌟 Key Features
 
-### 🧠 **Enhanced Multi-Agent Workflow**
+<details>
+<summary><strong>🧠 Enhanced Multi-Agent Workflow</strong></summary>
+
 - **PlanningAgent**: Intelligently decomposes complex queries into focused subquestions
 - **NormalizeQueryAgent**: Classifies queries and selects appropriate tools (company/patent/general)
 - **GeneralizeAgent**: Synthesizes information from multiple sources with source attribution
 - **Market Analysts**: Comprehensive opportunity and risk analysis with confidence scoring
 - **FactCheckingAgent**: Validates responses for accuracy and flags potential issues
 
-### 🔍 **Hybrid Retrieval System**
+</details>
+
+<details>
+<summary><strong>🔍 Hybrid Retrieval System</strong></summary>
+
 - **Dense + Sparse Search**: Combines vector embeddings with BM25 for optimal recall
 - **Source Attribution**: Every answer includes proper citations and confidence scores
 - **Intelligent Tool Selection**: Automatically chooses between exact lookup and RAG retrieval
 
-### 🎯 **Multiple Query Modes**
+</details>
+
+<details>
+<summary><strong>🎯 Multiple Query Modes</strong></summary>
+
 - **Company Analysis**: Business focus, market opportunities, competitive positioning
 - **Patent Analysis**: Technology details, patent portfolios, innovation trends
 - **General Innovation**: Industry trends, market landscapes, emerging technologies
 - **Freestyle Query**: Complex multi-faceted questions with automatic decomposition
 
-### 🔧 **Professional Infrastructure**
+</details>
+
+<details>
+<summary><strong>🔧 Professional Infrastructure</strong></summary>
+
 - **Centralized Configuration**: LLM types configurable per agent in `config/agent_config.py`
 - **Comprehensive Logging**: Detailed progress tracking and error handling
 - **Modular Architecture**: Easy to extend with new agents and tools
 - **Multiple Interfaces**: CLI, Chat mode, and Streamlit web interface
 
+</details>
+
 ## 🚀 Quick Start
 
-### 1. Installation
+<details>
+<summary><strong>1. Installation</strong></summary>
 
 ```bash
 # Clone the repository
@@ -45,7 +62,10 @@ cp .env.example .env
 # Edit .env with your API keys (OpenAI, Google AI, etc.)
 ```
 
-### 2. Data Ingestion
+</details>
+
+<details>
+<summary><strong>2. Data Ingestion</strong></summary>
 
 ```bash
 # Ingest company and patent data
@@ -58,7 +78,10 @@ python main.py --mode ingest --force_reindex
 # - Build enhanced data mappings
 ```
 
-### 3. Configure LLMs
+</details>
+
+<details>
+<summary><strong>3. Configure LLMs</strong></summary>
 
 Edit `config/agent_config.py` to configure which LLM each agent uses:
 
@@ -74,7 +97,10 @@ agent_config = {
 }
 ```
 
-### 4. Run Queries
+</details>
+
+<details>
+<summary><strong>4. Run Queries</strong></summary>
 
 ```bash
 # Or with custom query
@@ -92,7 +118,12 @@ streamlit run streamlit_app.py
 
 ```
 
+</details>
+
 ## 💻 Usage Examples
+
+<details>
+<summary><strong>Click to view Usage Examples</strong></summary>
 
 ### Company Analysis
 ```bash
@@ -114,7 +145,12 @@ python main.py --mode query --query "Compare TechNova and InnovateCorp's AI pate
 python main.py --mode query --query "What are the emerging trends in renewable energy patents and which companies are leading?"
 ```
 
+</details>
+
 ## 🌐 Streamlit Web Interface
+
+<details>
+<summary><strong>Click to view Streamlit Interface Details</strong></summary>
 
 Launch the comprehensive web interface:
 
@@ -129,7 +165,12 @@ streamlit run streamlit_app.py
 - **Query History**: Track previous analyses
 - **System Configuration**: View and monitor system status
 
+</details>
+
 ## 🏗️ System Architecture
+
+<details>
+<summary><strong>Click to view System Architecture Diagram</strong></summary>
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
@@ -159,7 +200,218 @@ streamlit run streamlit_app.py
                     └─────────────────────────┘
 ```
 
+</details>
+
+## 🎯 Product Suggestion Mode
+
+InnovARAG features a specialized **Product Suggestion Mode** that focuses on extracting and suggesting specific products, technologies, and innovations from retrieved patent and company data. This mode provides citation-backed product recommendations without relying on external knowledge.
+
+<details>
+<summary><strong>Click to view Product Suggestion Mode Overview</strong></summary>
+
+### Key Features
+
+- **Citation-Based Suggestions**: All product suggestions are grounded in retrieved contexts with proper citations
+- **Context-Only Analysis**: No external knowledge used - only what's found in the patent and company databases  
+- **Streamlined Workflow**: Skips market analysis agents to focus specifically on product extraction
+- **Source Attribution**: Every suggestion includes detailed source information and references
+- **Validation System**: Built-in fact-checking ensures product suggestions are supported by evidence
+
+### How It Works
+
+1. **Query Processing**: User query is analyzed and split into focused subquestions
+2. **Context Retrieval**: System retrieves relevant patent and company contexts using hybrid search
+3. **Product Extraction**: Specialized agents extract specific products and technologies from contexts
+4. **Citation Verification**: Each suggestion is validated against source material
+5. **Structured Output**: Results presented with clear citations and source attribution
+
+</details>
+
+<details>
+<summary><strong>Click to view Product Suggestion Mode Usage</strong></summary>
+
+### Enabling Product Suggestion Mode
+
+**Streamlit Interface:**
+1. Open the InnovARAG web interface
+2. In the sidebar, locate "🎯 Operation Mode"
+3. Check the "🎯 Product Suggestion Mode" checkbox
+4. The interface will switch to product suggestion workflow
+
+**Command Line:**
+```bash
+# Enable product suggestion mode for single query
+python main.py --mode query --query "artificial intelligence applications" --product_suggestion
+
+# Interactive chat with product suggestions
+python main.py --mode chat --product_suggestion
+```
+
+</details>
+
+### Example Queries for Product Suggestion Mode
+
+<details>
+<summary><strong>Technology Discovery Queries</strong></summary>
+
+```python
+# AI and Machine Learning Products
+"artificial intelligence applications and machine learning products"
+"neural network implementations in consumer devices"  
+"computer vision technologies for healthcare"
+
+# Biotechnology Products
+"biomedical devices and diagnostic tools"
+"pharmaceutical innovations and drug delivery systems"
+"genetic sequencing technologies"
+
+# Hardware and Electronics
+"semiconductor innovations and chip technologies"
+"IoT devices and smart sensor applications"
+"renewable energy storage solutions"
+```
+
+</details>
+
+<details>
+<summary><strong>Company-Specific Product Analysis</strong></summary>
+
+```python
+# Company Product Portfolio
+"What products does Intel develop and manufacture?"
+"Describe the biomedical products from Advanced Biomedical Technologies"
+"List the AI-related products from Google's patent portfolio"
+
+# Technology Focus Areas
+"What are the main product categories for Toyota's innovations?"
+"Describe the software products mentioned in Microsoft patents"
+"What consumer electronics does Samsung focus on?"
+```
+
+</details>
+
+<details>
+<summary><strong>Click to view Product Suggestion Output Format</strong></summary>
+
+### Expected Output Structure
+
+Product Suggestion Mode provides structured responses with:
+
+**1. Product Suggestions**
+- Specific product names and descriptions
+- Technology categories and applications
+- Implementation details from patents
+
+**2. Source Citations**
+- Patent IDs and application numbers
+- Company names and affiliations  
+- Relevant context excerpts
+
+**3. Validation Information**
+- Confidence scores (1-10)
+- Citation verification status
+- Potential issues or limitations
+
+### Sample Output Example
+
+```
+🎯 Product Suggestions
+
+1. **Neural Processing Unit (NPU) for Edge Computing**
+   - Description: Specialized AI chip for real-time neural network inference
+   - Applications: Mobile devices, IoT sensors, autonomous vehicles
+   - Source: Patent US123456789 from Intel Corporation
+   - Context: "The NPU architecture enables 10x faster AI processing..."
+
+2. **Biomarker Detection System**
+   - Description: Lab-on-chip device for rapid disease screening
+   - Applications: Point-of-care diagnostics, personalized medicine
+   - Source: Patent US987654321 from Advanced Biomedical Technologies
+   - Context: "The microfluidic system can detect cancer biomarkers..."
+
+📊 Validation Results
+- Overall Score: 9/10
+- Confidence: High
+- Citations Verified: 2/2
+- Issues Found: None
+```
+
+</details>
+
+<details>
+<summary><strong>Click to view Mode Comparison</strong></summary>
+
+### Product Suggestion vs Market Analysis Mode
+
+| Aspect | Product Suggestion Mode | Market Analysis Mode |
+|--------|------------------------|---------------------|
+| **Primary Focus** | Extract specific products from data | Comprehensive market strategy analysis |
+| **Data Sources** | Retrieved contexts only | Retrieved contexts + strategic analysis |
+| **Output Type** | Product lists with citations | Market opportunities, risks, strategies |
+| **Workflow** | Planning → Retrieval → Extraction → Validation | Full multi-agent workflow with analysis team |
+| **Use Cases** | Product discovery, technology scouting | Strategic planning, competitive analysis |
+| **Processing Time** | Faster (streamlined workflow) | Longer (comprehensive analysis) |
+| **Citation Requirements** | Mandatory for all suggestions | Important but not exclusive focus |
+
+### When to Use Each Mode
+
+**Choose Product Suggestion Mode when:**
+- Looking for specific products or technologies
+- Need citation-backed recommendations
+- Want to discover what's available in patent data
+- Require fast, focused product extraction
+- Building technology landscapes or competitive intelligence
+
+**Choose Market Analysis Mode when:**
+- Need strategic business insights
+- Want comprehensive opportunity analysis
+- Require risk assessment and recommendations
+- Planning market entry or competitive positioning
+- Need synthesis across multiple business dimensions
+
+</details>
+
+<details>
+<summary><strong>Click to view Advanced Features</strong></summary>
+
+### Advanced Product Suggestion Features
+
+**Context Preservation**
+- Sequential subquestions maintain context from previous answers
+- Enhanced understanding for complex product queries
+- Improved relevance across multi-part questions
+
+**Hybrid Search Integration** 
+- Dense semantic search for conceptual product matching
+- Sparse keyword search for exact product name matching
+- Combined results for comprehensive product discovery
+
+**Validation System**
+- Citation verification against source materials
+- Confidence scoring for each product suggestion
+- Flagging of potentially unsupported claims
+
+**Performance Optimizations**
+- Caching for faster repeated queries
+- Parallel processing for batch product discovery
+- FAISS indexing for efficient similarity search
+
+### Limitations and Considerations
+
+- **Data Dependency**: Limited to what's available in patent and company databases
+- **Citation Requirement**: All suggestions must be supported by retrieved contexts
+- **No External Knowledge**: Cannot suggest products not found in the data
+- **Patent Focus**: Emphasis on patented technologies and innovations
+- **Time Sensitivity**: Patent data may not reflect latest market products
+
+</details>
+
+
+
 ## 📁 Project Structure
+
+<details>
+<summary><strong>Click to view Complete Project Structure</strong></summary>
 
 ```
 InnovARAG/
@@ -197,27 +449,44 @@ InnovARAG/
 └── requirements.txt                 # Dependencies
 ```
 
+</details>
+
 ## 🔧 Configuration
 
-### LLM Configuration
+<details>
+<summary><strong>LLM Configuration</strong></summary>
+
 Edit `config/agent_config.py`:
 - **DEFAULT_LLM_TYPE**: Global default LLM
 - **agent_config**: Per-agent LLM specification
 
-### RAG Configuration  
+</details>
+
+<details>
+<summary><strong>RAG Configuration</strong></summary>
+
 Edit `config/rag_config.py`:
 - **Embedding models**: HuggingFace embeddings configuration
 - **Chunk sizes**: Text processing parameters
 - **Index settings**: Vector database configuration
 
-### Prompt Templates
+</details>
+
+<details>
+<summary><strong>Prompt Templates</strong></summary>
+
 All prompts are centralized in `config/prompts.py`:
 - **Chain-of-Thought reasoning**
 - **Source attribution requirements**
 - **Confidence scoring guidelines**
 - **Examples for each agent**
 
+</details>
+
 ## 📊 Output Features
+
+<details>
+<summary><strong>Click to view Output Features Details</strong></summary>
 
 ### Comprehensive Analysis
 - **Source Attribution**: `[Company: TechNova]`, `[Patent: 273556553]`
@@ -230,7 +499,12 @@ All prompts are centralized in `config/prompts.py`:
 - **Text Summary**: Executive-friendly analysis summary
 - **Structured Data**: Query history and performance metrics
 
+</details>
+
 ## 🔍 Advanced Features
+
+<details>
+<summary><strong>Click to view Advanced Features</strong></summary>
 
 ### Hybrid Retrieval
 - **Dense Retrieval**: Semantic vector search using HuggingFace embeddings
@@ -248,6 +522,8 @@ All prompts are centralized in `config/prompts.py`:
 - **Confidence Assessment**: Multi-criteria reliability scoring
 - **Error Detection**: Flags contradictions and potential hallucinations
 
+</details>
+
 ## 🚦 Usage Modes
 
 | Mode | Description | Command |
@@ -259,6 +535,9 @@ All prompts are centralized in `config/prompts.py`:
 | **streamlit** | Web interface | `streamlit run streamlit_app.py` |
 
 ## 🛠️ Development
+
+<details>
+<summary><strong>Click to view Development Guidelines</strong></summary>
 
 ### Adding New Agents
 1. Create agent class inheriting from `BaseAgent`
@@ -279,7 +558,12 @@ All prompts are in `config/prompts.py` with:
 - Examples and guidelines
 - Source attribution requirements
 
+</details>
+
 ## 📝 Environment Variables
+
+<details>
+<summary><strong>Click to view Environment Configuration</strong></summary>
 
 Create `.env` file:
 ```env
@@ -291,8 +575,13 @@ GOOGLE_API_KEY=your_google_api_key
 
 ```
 
+</details>
+
 
 ## 🚀 Example Queries for Testing Optimized Tools
+
+<details>
+<summary><strong>Click to view Testing Examples</strong></summary>
 
 ### **Basic Company & Patent Lookups**
 ```
@@ -367,7 +656,12 @@ GOOGLE_API_KEY=your_google_api_key
     - Tests: parallel processing and efficiency gains
 ```
 
+</details>
+
 ## 🔧 **Testing Instructions**
+
+<details>
+<summary><strong>Click to view Testing Instructions</strong></summary>
 
 1. **Initialize System**: Use sidebar to initialize with your preferred LLM
 2. **Test Basic Tools**: Start with exact lookups to verify data access
@@ -379,7 +673,12 @@ GOOGLE_API_KEY=your_google_api_key
    - Company RAG retrieval shows correct Hojin IDs
    - Company patents lookup displays properly formatted results
 
+</details>
+
 ## 📊 **Expected Results**
+
+<details>
+<summary><strong>Click to view Expected Results</strong></summary>
 
 - **Faster responses** due to caching and FAISS optimization
 - **Better accuracy** with exact match prioritization  
@@ -388,9 +687,12 @@ GOOGLE_API_KEY=your_google_api_key
 - **Proper error handling** with helpful user guidance
 - **Visual notifications** with clear success/error/completion messages
 
+</details>
+
 ## 🚀 **Latest Improvements & Performance Enhancements**
 
-### **📈 Performance Optimizations**
+<details>
+<summary><strong>📈 Performance Optimizations</strong></summary>
 
 #### **⚡ High-Performance Search System**
 - **12x Parallel Workers**: Increased from 4 to 12 for maximum parallelization
@@ -400,7 +702,10 @@ GOOGLE_API_KEY=your_google_api_key
 - **Memory Optimization**: Smart eviction based on system memory usage with `psutil` monitoring
 - **Async Batch Processing**: Process multiple queries simultaneously with memory management
 
-### **🎯 Tool Selection Improvements**
+</details>
+
+<details>
+<summary><strong>🎯 Tool Selection Improvements</strong></summary>
 
 #### **Exact Lookup Tools** (High-confidence sources)
 - `exact_company_lookup`: Complete company profiles with business focus and keywords
@@ -416,15 +721,10 @@ GOOGLE_API_KEY=your_google_api_key
 - `batch_optimized_retrieval`: Parallel processing for multiple related queries
 - `get_performance_analytics`: System performance monitoring and metrics
 
-### **🔍 Data Quality Fixes**
+</details>
 
-#### **Patent Data Column Mapping**
-- **Fixed Column Names**: Updated from old `abstract` → new `patent_abstract`
-- **Complete Patent Information**: Now returns full abstracts and metadata
-- **Enhanced Patent Details**: Added filing dates, publication numbers, and dates
-- **Proper Data Source**: All components now use `data/us_patent202506.csv` (1.58M patents)
-
-### **📊 Performance Metrics**
+<details>
+<summary><strong>📊 Performance Metrics</strong></summary>
 
 #### **Configuration Updates**
 ```python
@@ -445,7 +745,12 @@ CacheConfig(
 )
 ```
 
+</details>
+
 ## 🤝 Contributing
+
+<details>
+<summary><strong>Click to view Contributing Guidelines</strong></summary>
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature-name`
@@ -453,6 +758,8 @@ CacheConfig(
 4. Add tests if applicable
 5. Update documentation
 6. Submit a pull request
+
+</details>
 
 ## 📄 License
 

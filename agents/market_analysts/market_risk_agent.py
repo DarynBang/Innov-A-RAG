@@ -11,7 +11,7 @@ from config.prompts import (
     DEFAULT_MODELS
 )
 from langchain_openai import ChatOpenAI
-from langchain_community.llms import Ollama
+from langchain_ollama import ChatOllama
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
@@ -42,9 +42,9 @@ class MarketRiskAgent(BaseAgent):
                     model=DEFAULT_MODELS["gemini"],
                     temperature=0
                 )
-            elif self.llm_type == "qwen":
-                return Ollama(
-                    model=DEFAULT_MODELS["qwen"],
+            elif self.llm_type == "ollama":
+                return ChatOllama(
+                    model=DEFAULT_MODELS["ollama"],
                     temperature=0
                 )
             else:

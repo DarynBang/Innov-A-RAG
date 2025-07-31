@@ -92,6 +92,8 @@ if 'performance_stats' not in st.session_state:
     st.session_state.performance_stats = {}
 
 # Session state for other variables (audio removed)
+if 'product_suggestion_mode' not in st.session_state:
+    st.session_state.product_suggestion_mode = False
 
 @st.cache_resource
 def initialize_innovarag():
@@ -124,7 +126,8 @@ def initialize_innovarag():
             optimization_config = RECOMMENDED_CONFIG_FOR_CURRENT_DATASET
             
             # Reset optimized hybrid tools for clean initialization
-            reset_optimized_hybrid_tools()
+            # DO NOT reset unnecessarily - it destroys singleton pattern and causes 53s re-init delay
+            # reset_optimized_hybrid_tools()  # Commented out to prevent redundant re-initialization
             
             # Initialize optimized tools
             optimization_tools = get_optimized_hybrid_tools()
@@ -180,10 +183,43 @@ st.sidebar.markdown("**Innovation Discovery Platform**")
 # Model selection
 model_type = st.sidebar.selectbox(
     "🤖 Select LLM Model",
-    ["openai", "gemini", "qwen"],
+    ["openai", "gemini", "ollama"],
     index=0,
     help="Choose the language model for the multi-agent system"
 )
+
+# Product suggestion mode toggle
+st.sidebar.markdown("---")
+st.sidebar.subheader("🎯 Operation Mode")
+
+product_suggestion_mode = st.sidebar.checkbox(
+    "🎯 Product Suggestion Mode", 
+    value=st.session_state.product_suggestion_mode,
+    help="Enable to get product suggestions from retrieved data only (skips market analysis)"
+)
+
+# Update session state
+if product_suggestion_mode != st.session_state.product_suggestion_mode:
+    st.session_state.product_suggestion_mode = product_suggestion_mode
+
+# Mode explanation - Fixed to show on separate lines
+if product_suggestion_mode:
+    st.sidebar.markdown("**📋 Product Suggestion Mode Active**")
+    st.sidebar.info("""
+    • Extracts product suggestions from retrieved contexts
+    • Skips opportunity/risk analysis agents  
+    • Focuses on citation-backed product recommendations
+    • All suggestions must be grounded in retrieved data
+    """)
+else:
+    st.sidebar.markdown("**📊 Market Analysis Mode Active**")  
+    st.sidebar.info("""
+    • Full multi-agent workflow with strategic analysis
+    • Includes opportunity and risk assessment
+    • Provides comprehensive market insights
+    • Provides comprehensive market insights
+    • Uses all available analysis agents
+    """)
 
 # System initialization control
 st.sidebar.markdown("---")
@@ -263,17 +299,34 @@ def display_system_overview():
     """Display system overview and capabilities."""
     st.header("🔬 InnovARAG System Overview")
     
+    # Show current mode
+    if st.session_state.product_suggestion_mode:
+        st.info("🎯 **Currently in Product Suggestion Mode** - Focus on extracting products from retrieved data with citations")
+    else:
+        st.info("📊 **Currently in Market Analysis Mode** - Full workflow with strategic analysis")
+    
     col1, col2, col3 = st.columns(3)
     
     with col1:
         st.subheader("🤖 Multi-Agent System")
-        st.write("""
-        - **Planning Agent**: Query analysis and workflow planning
-        - **Normalize Agent**: Query classification with Langchain tools
-        - **Generalize Agent**: Information synthesis
-        - **Market Analysts**: Strategic analysis (conditional)
-        - **Fact Checker**: Response validation
-        """)
+        if st.session_state.product_suggestion_mode:
+            st.write("""
+            **Product Suggestion Workflow:**
+            - **Planning Agent**: Query analysis and workflow planning
+            - **Normalize Agent**: Query classification with Langchain tools
+            - **Generalize Agent**: Information synthesis
+            - **Product Manager**: Extract products from contexts
+            - **Fact Checker**: Product suggestion validation
+            """)
+        else:
+            st.write("""
+            **Market Analysis Workflow:**
+            - **Planning Agent**: Query analysis and workflow planning
+            - **Normalize Agent**: Query classification with Langchain tools
+            - **Generalize Agent**: Information synthesis
+            - **Market Analysts**: Strategic analysis (conditional)
+            - **Fact Checker**: Response validation
+            """)
     
     with col2:
         st.subheader("🔍 Enhanced Search")
@@ -286,14 +339,24 @@ def display_system_overview():
         """)
     
     with col3:
-        st.subheader("📊 Features")
-        st.write("""
-        - **Conditional Analysis**: Smart team involvement
-        - **Query Splitting**: Complex query breakdown
-        - **Source Attribution**: Comprehensive citations
-        - **Confidence Scoring**: Reliability assessment
-        - **Real-time Processing**: Live workflow tracking
-        """)
+        if st.session_state.product_suggestion_mode:
+            st.subheader("🎯 Product Features")
+            st.write("""
+            - **Citation-Based**: All suggestions cite sources
+            - **Context Grounded**: No external knowledge used
+            - **Query Splitting**: Complex query breakdown
+            - **Source Attribution**: Comprehensive citations
+            - **Validation**: Product suggestion accuracy check
+            """)
+        else:
+            st.subheader("📊 Market Features")
+            st.write("""
+            - **Conditional Analysis**: Smart team involvement
+            - **Query Splitting**: Complex query breakdown
+            - **Source Attribution**: Comprehensive citations
+            - **Confidence Scoring**: Reliability assessment
+            - **Real-time Processing**: Live workflow tracking
+            """)
 
 def display_enhanced_features():
     """Display enhanced features and comprehensive testing capabilities."""
@@ -1242,7 +1305,10 @@ def display_enhanced_features():
                             query = f"What patents does {company_name} have?"
                             
                             # Run the enhanced workflow
-                            results = st.session_state.runner.run_enhanced_workflow(query)
+                            results = st.session_state.runner.run_enhanced_workflow(
+                                query, 
+                                product_suggestion_mode=st.session_state.product_suggestion_mode
+                            )
                             
                             if "error" not in results:
                                 st.success("✅ Enhanced patent analysis completed!")
@@ -1322,7 +1388,10 @@ def display_enhanced_features():
             try:
                 with st.spinner("Running demo with context preservation..."):
                     if st.session_state.runner:
-                        results = st.session_state.runner.run_enhanced_workflow(selected_demo)
+                        results = st.session_state.runner.run_enhanced_workflow(
+                            selected_demo, 
+                            product_suggestion_mode=st.session_state.product_suggestion_mode
+                        )
                         
                         if "error" not in results:
                             st.success("✅ Context preservation demo completed!")
@@ -1782,7 +1851,10 @@ def main():
     
     # Header with improved styling
     st.title("🚀 InnovARAG - Innovation Discovery Platform")
-    st.markdown("**Enhanced Multi-Agent RAG System with True Hybrid Search**")
+    if st.session_state.product_suggestion_mode:
+        st.markdown("**🎯 Product Suggestion Mode: Extract products from retrieved data with citations**")
+    else:
+        st.markdown("**📊 Market Analysis Mode: Enhanced Multi-Agent RAG System with True Hybrid Search**")
     
     # Improved feature highlights with better styling
     st.markdown("""
@@ -1842,7 +1914,7 @@ def main():
                 <div style="color: #bdc3c7; text-align: left; margin-bottom: 15px; line-height: 1.8;">
                     <div style="margin-bottom: 12px;"><strong style="color: #3498db;">👈 Use the sidebar to:</strong></div>
                     <div style="margin-left: 20px;">
-                        <div style="margin-bottom: 8px;">1️⃣ Select your preferred LLM model (OpenAI, Gemini, or Qwen)</div>
+                        <div style="margin-bottom: 8px;">1️⃣ Select your preferred LLM model (OpenAI, Gemini, or Ollama)</div>
                         <div style="margin-bottom: 8px;">2️⃣ Click "Initialize System" to load the data</div>
                         <div style="margin-bottom: 8px;">3️⃣ Wait for the system to load patents and company data</div>
                         <div style="margin-bottom: 8px;">4️⃣ Start exploring with powerful AI analysis!</div>
@@ -1962,7 +2034,11 @@ def main():
     
     with tab1:
         # Main query interface
-        st.header("💬 Multi-Agent Analysis")
+        if st.session_state.product_suggestion_mode:
+            st.header("🎯 Product Suggestion Analysis")
+            st.info("**Product Suggestion Mode Active**: The system will extract and suggest products found in the retrieved contexts, with proper citations.")
+        else:
+            st.header("💬 Multi-Agent Analysis")
         
         # Query input
         # Check if query was set from example button
@@ -1971,25 +2047,42 @@ def main():
             # Clear the session state after using it
             st.session_state.query_input = ''
         
-        query = st.text_area(
-            "Enter your innovation research query:",
-            value=default_query,
-            placeholder="e.g., What are the market opportunities for AI companies in healthcare?",
-            height=120,
-            help="Ask questions about companies, patents, market analysis, or innovation strategies"
-        )
+        if st.session_state.product_suggestion_mode:
+            query = st.text_area(
+                "Enter your query to find product suggestions:",
+                value=default_query,
+                placeholder="e.g., artificial intelligence applications, machine learning products, biotech innovations",
+                height=120,
+                help="Ask about technologies, patents, or company areas - system will extract specific products from retrieved data"
+            )
+        else:
+            query = st.text_area(
+                "Enter your innovation research query:",
+                value=default_query,
+                placeholder="e.g., What are the market opportunities for AI companies in healthcare?",
+                height=120,
+                help="Ask questions about companies, patents, market analysis, or innovation strategies"
+            )
         
         # Analysis button with improved styling
         st.markdown("<br>", unsafe_allow_html=True)
         
         col1, col2, col3 = st.columns([2, 1, 2])
         with col2:
-            analyze_button = st.button(
-                "🚀 Analyze Query", 
-                type="primary", 
-                use_container_width=True,
-                help="Run the multi-agent analysis workflow"
-            )
+            if st.session_state.product_suggestion_mode:
+                analyze_button = st.button(
+                    "🎯 Get Product Suggestions", 
+                    type="primary", 
+                    use_container_width=True,
+                    help="Extract product suggestions from retrieved contexts"
+                )
+            else:
+                analyze_button = st.button(
+                    "🚀 Analyze Query", 
+                    type="primary", 
+                    use_container_width=True,
+                    help="Run the multi-agent analysis workflow"
+                )
         
         # Process query
         if analyze_button and query.strip():
@@ -2009,7 +2102,10 @@ def main():
                     
                     # Process query with enhanced workflow
                     start_time = time.time()
-                    results = st.session_state.runner.run_enhanced_workflow(query)
+                    results = st.session_state.runner.run_enhanced_workflow(
+                        query, 
+                        product_suggestion_mode=st.session_state.product_suggestion_mode
+                    )
                     processing_time = time.time() - start_time
                     
                     # Store results
@@ -2029,8 +2125,12 @@ def main():
                         with col3:
                             st.metric("Contexts Retrieved", metadata.get('contexts_count', 0))
                         with col4:
-                            analysis_team_used = metadata.get('analysis_team_used', False)
-                            st.metric("Analysis Team", "Used" if analysis_team_used else "Skipped")
+                            if st.session_state.product_suggestion_mode:
+                                mode = metadata.get('mode', 'product_suggestion')
+                                st.metric("Mode", "Product Suggestions")
+                            else:
+                                analysis_team_used = metadata.get('analysis_team_used', False)
+                                st.metric("Analysis Team", "Used" if analysis_team_used else "Skipped")
                         
                         # Show context preservation info with better formatting
                         context_preservation = results.get('context_preservation', {})
@@ -2056,14 +2156,20 @@ def main():
                             st.success(f"🎉 Multi-agent analysis completed successfully! (completed in {processing_time:.2f}s)")
                         
                         # Enhanced Results Display
-                        display_enhanced_workflow_results(results)
+                        if st.session_state.product_suggestion_mode:
+                            display_product_suggestion_results(results)
+                        else:
+                            display_enhanced_workflow_results(results)
                 
                 except Exception as e:
                     st.error(f"❌ Analysis failed: {str(e)}")
                     st.exception(e)
         
         elif analyze_button:
-            st.warning("⚠️ Please enter a query to analyze.")
+            if st.session_state.product_suggestion_mode:
+                st.warning("⚠️ Please enter a query to get product suggestions.")
+            else:
+                st.warning("⚠️ Please enter a query to analyze.")
     
     with tab2:
         if st.session_state.runner is None:
@@ -2092,6 +2198,270 @@ def main():
                 st.write(f"**Query:** {entry['query']}")
 
 
+
+def display_product_suggestion_results(results):
+    """Display product suggestion results with comprehensive workflow details."""
+    
+    # Main product suggestions display
+    product_suggestions = results.get('product_suggestions', '')
+    if product_suggestions:
+        st.subheader("🎯 Product Suggestions")
+        
+        # Show confidence and validation info
+        fact_checking = results.get('fact_checking', {})
+        overall_score = fact_checking.get('overall_score', 0)
+        confidence_level = fact_checking.get('confidence_level', 'unknown')
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Validation Score", f"{overall_score}/10")
+        with col2:
+            st.metric("Confidence", confidence_level.upper())
+        with col3:
+            flagged_issues = fact_checking.get('flagged_issues', [])
+            st.metric("Issues Found", len(flagged_issues))
+        
+        # Enhanced Product Suggestions Display with better formatting
+        st.markdown("### Product/Technology Suggestions")
+        
+        # Try to parse and format product suggestions better
+        if isinstance(product_suggestions, str):
+            # Split by bullet points or numbered items
+            suggestions_list = []
+            if "•" in product_suggestions:
+                suggestions_list = [s.strip() for s in product_suggestions.split("•") if s.strip()]
+            elif "Product:" in product_suggestions:
+                # Split by "Product:" and format each
+                parts = product_suggestions.split("Product:")
+                for part in parts[1:]:  # Skip first empty part
+                    if part.strip():
+                        suggestions_list.append(f"**Product:** {part.strip()}")
+            else:
+                suggestions_list = [product_suggestions]
+            
+            # Display formatted suggestions
+            for i, suggestion in enumerate(suggestions_list, 1):
+                with st.container():
+                    st.markdown(f"**{i}.** {suggestion}")
+                    st.markdown("---")
+        else:
+            st.write(product_suggestions)
+        
+        # Comprehensive workflow details tabs
+        display_product_workflow_details(results)
+        
+        # Display validation details if there are issues
+        if flagged_issues:
+            with st.expander("⚠️ Validation Issues", expanded=False):
+                for i, issue in enumerate(flagged_issues, 1):
+                    st.write(f"{i}. {issue}")
+        
+        # Citation verification details
+        citation_verification = fact_checking.get('citation_verification', {})
+        if citation_verification:
+            with st.expander("📚 Citation Analysis", expanded=False):
+                verified_citations = citation_verification.get('verified_citations', '')
+                if verified_citations:
+                    st.write("**Citation Verification:**")
+                    st.text(verified_citations)
+                
+                unsupported_products = citation_verification.get('unsupported_products', [])
+                if unsupported_products:
+                    st.write("**Products with Potential Citation Issues:**")
+                    for product in unsupported_products:
+                        st.write(f"- {product}")
+        
+        # Context viewer
+        display_context_viewer(results)
+        
+    else:
+        st.warning("No product suggestions were generated. This could mean:")
+        st.write("- No specific products were found in the retrieved contexts")
+        st.write("- The query didn't retrieve relevant data containing product information")
+        st.write("- Try a more specific query about technologies, patents, or company products")
+
+def display_product_workflow_details(results):
+    """Display detailed workflow information for product suggestion mode."""
+    
+    with st.expander("📊 Detailed Workflow Information", expanded=False):
+        tab1, tab2, tab3, tab4 = st.tabs(["🔄 Normalization", "🧠 Synthesis", "🎯 Product Generation", "✅ Validation"])
+        
+        with tab1:
+            st.markdown("**Query Normalization & Retrieval:**")
+            normalization_results = results.get('normalization_results', [])
+            
+            if normalization_results:
+                for i, norm_result in enumerate(normalization_results, 1):
+                    st.write(f"**Step {i} - Production Mode Retrieval:**")
+                    
+                    # Show original vs normalized query
+                    original_query = norm_result.get('original_query', 'Unknown')
+                    st.write(f"**Original Query:** {original_query}")
+                    
+                    # Show retrieval details
+                    contexts = norm_result.get('retrieved_contexts', [])
+                    total_contexts = norm_result.get('total_contexts', len(contexts))
+                    st.write(f"**Contexts Retrieved:** {total_contexts}")
+                    
+                    # Show tool used
+                    if contexts:
+                        tool_used = contexts[0].get('tool', 'Unknown')
+                        st.write(f"**Retrieval Tool:** {tool_used}")
+                        st.write(f"**Search Type:** Both companies and patents (k=30)")
+            else:
+                st.write("No normalization results available")
+        
+        with tab2:
+            st.markdown("**Information Synthesis:**")
+            synthesis_result = results.get('synthesis_result', 'No synthesis available')
+            
+            # Show synthesis details
+            if isinstance(synthesis_result, dict):
+                st.write(f"**Synthesis Mode:** Production")
+                st.write(f"**Output Type:** Structured JSON")
+                if 'content' in synthesis_result:
+                    st.text_area("Synthesis Content", synthesis_result['content'], height=200)
+                else:
+                    st.json(synthesis_result)
+            else:
+                st.text_area("Synthesis Result", str(synthesis_result), height=200)
+        
+        with tab3:
+            st.markdown("**Product Suggestion Generation:**")
+            
+            # Show metadata about product generation
+            metadata = results.get('metadata', {})
+            workflow_type = metadata.get('workflow', 'Unknown')
+            contexts_count = metadata.get('contexts_count', 0)
+            
+            st.write(f"**Workflow Type:** {workflow_type}")
+            st.write(f"**Total Contexts Used:** {contexts_count}")
+            st.write(f"**Generation Mode:** Production with structured citations")
+            
+            # Show product suggestions length
+            product_suggestions = results.get('product_suggestions', '')
+            if product_suggestions:
+                length = len(str(product_suggestions))
+                st.write(f"**Response Length:** {length} characters")
+        
+        with tab4:
+            st.markdown("**Fact-Checking & Validation:**")
+            fact_checking = results.get('fact_checking', {})
+            
+            if fact_checking:
+                # Production criteria breakdown
+                production_criteria = fact_checking.get('production_criteria', {})
+                if production_criteria:
+                    st.write("**Production Criteria Scores:**")
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        robustness = production_criteria.get('robustness', {})
+                        st.metric("Robustness", f"{robustness.get('score', 0)}/10")
+                        
+                        standardization = production_criteria.get('standardization', {})
+                        st.metric("Standardization", f"{standardization.get('score', 0)}/10")
+                    
+                    with col2:
+                        detail_level = production_criteria.get('detail_level', {})
+                        st.metric("Detail Level", f"{detail_level.get('score', 0)}/10")
+                        
+                        citation_quality = production_criteria.get('citation_quality', {})
+                        st.metric("Citation Quality", f"{citation_quality.get('score', 0)}/10")
+                
+                # Overall validation summary
+                overall_score = fact_checking.get('overall_score', 0)
+                confidence_level = fact_checking.get('confidence_level', 'unknown')
+                flagged_issues = fact_checking.get('flagged_issues', [])
+                
+                st.write(f"**Overall Score:** {overall_score}/10")
+                st.write(f"**Confidence Level:** {confidence_level.upper()}")
+                st.write(f"**Issues Found:** {len(flagged_issues)}")
+                
+                if flagged_issues:
+                    st.write("**Issues Details:**")
+                    for i, issue in enumerate(flagged_issues, 1):
+                        st.write(f"  {i}. {issue}")
+                
+                # Recommendations
+                recommendations = fact_checking.get('recommendations', [])
+                if recommendations:
+                    st.write("**Recommendations:**")
+                    for i, rec in enumerate(recommendations, 1):
+                        st.write(f"  {i}. {rec}")
+            else:
+                st.write("No validation results available")
+
+def display_context_viewer(results):
+    """Display context viewer with citation support."""
+    contexts = results.get('sources', [])
+    
+    if not contexts:
+        return
+    
+    st.subheader("📋 Retrieved Context Sources")
+    st.info("These are the sources used to generate the product suggestions. Click to view detailed content.")
+    
+    # Get normalization results for detailed context
+    normalization_results = results.get('normalization_results', [])
+    all_contexts = []
+    
+    for norm_result in normalization_results:
+        retrieved_contexts = norm_result.get('retrieved_contexts', [])
+        all_contexts.extend(retrieved_contexts)
+    
+    if not all_contexts:
+        st.warning("No detailed context information available.")
+        st.write("This could be due to:")
+        st.write("- No contexts were retrieved during the query process")
+        st.write("- The workflow mode doesn't provide detailed context information")
+        return
+    
+    # Display contexts in expandable sections
+    for i, context in enumerate(all_contexts, 1):
+        tool_name = context.get('tool', 'Unknown Tool')
+        result = context.get('result', '')
+        
+        # Create a preview of the context
+        if isinstance(result, str):
+            preview = result[:200] + "..." if len(result) > 200 else result
+        elif isinstance(result, dict):
+            # Handle dict results (like from optimized tools)
+            preview_text = str(result)[:200] + "..." if len(str(result)) > 200 else str(result)
+            preview = preview_text
+        else:
+            preview = str(result)[:200] + "..." if len(str(result)) > 200 else str(result)
+        
+        # Use a unique key that doesn't reset on each interaction
+        context_key = f"context_{i}_{hash(str(context))}"
+        
+        with st.expander(f"📄 Context {i}: {tool_name}", expanded=False):
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                st.write("**Preview:**")
+                st.text(preview)
+            
+            with col2:
+                st.write("**Source:**")
+                st.code(tool_name)
+                
+                # Show detailed view toggle with persistent state
+                view_full_key = f"view_full_{context_key}"
+                if st.button(f"View Full Content", key=f"btn_{context_key}"):
+                    st.session_state[view_full_key] = not st.session_state.get(view_full_key, False)
+            
+            # Show full content if toggled
+            if st.session_state.get(view_full_key, False):
+                st.write("**Full Content:**")
+                if isinstance(result, str):
+                    # Show full content without truncation, but with scrollable area
+                    st.text_area("Content", result, height=400, key=f"content_{context_key}")
+                elif isinstance(result, dict):
+                    # Pretty print JSON with syntax highlighting
+                    st.json(result)
+                else:
+                    st.text_area("Content", str(result), height=400, key=f"content_str_{context_key}")
 
 if __name__ == "__main__":
     main() 

@@ -76,3 +76,5 @@ lru-dict>=1.2.0  # For LRU cache implementations
 pytest-asyncio>=0.21.0  # For testing async functions
 pytest-benchmark>=4.0.0  # For performance benchmarking 
 
+langchain_ollama 
+

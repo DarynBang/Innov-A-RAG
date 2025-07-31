@@ -22,7 +22,6 @@ class BaseAgent(ABC):
         self.name = name
         self.tool_executor = None  # default
 
-    @abstractmethod
     def run(self,
             input_data: dict) -> str:
         """Run the agent with input data and return output string."""
